@@ -37,7 +37,10 @@ export function AuthProvider({ children }) {
   }
 
   async function login(email, password) {
-    return signInWithEmailAndPassword(auth, email, password);
+    const result = await signInWithEmailAndPassword(auth, email, password);
+    const role = await getUserRole(result.user.uid);
+    setUserRole(role);
+    return result;
   }
 
   async function loginWithGoogle(role = 'cashier') {
@@ -54,6 +57,9 @@ export function AuthProvider({ children }) {
         role,
         createdAt: new Date()
       });
+      setUserRole(role);
+    } else {
+      setUserRole(userDoc.data().role);
     }
     return result;
   }
@@ -84,12 +90,17 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        const role = await getUserRole(user.uid);
-        setUserRole(role);
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          setCurrentUser({ ...user, ...userDoc.data() });
+          setUserRole(userDoc.data().role);
+        } else {
+          setCurrentUser(user);
+        }
       } else {
+        setCurrentUser(null);
         setUserRole(null);
       }
-      setCurrentUser(user);
       setLoading(false);
     });
 

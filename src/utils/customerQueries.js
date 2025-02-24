@@ -4,6 +4,7 @@ import {
   doc,
   addDoc,
   updateDoc,
+  deleteDoc,
   query,
   where,
   getDocs,
@@ -93,6 +94,16 @@ export async function updateCustomer(customerId, customerData) {
     });
   } catch (error) {
     console.error('Error updating customer:', error);
+    throw error;
+  }
+}
+
+// Delete a customer
+export async function deleteCustomer(customerId) {
+  try {
+    await deleteDoc(doc(db, 'customers', customerId));
+  } catch (error) {
+    console.error('Error deleting customer:', error);
     throw error;
   }
 }

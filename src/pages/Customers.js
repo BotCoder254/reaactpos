@@ -5,11 +5,13 @@ import {
   FiSearch,
   FiEdit2,
   FiShoppingBag,
-  FiRefreshCw
+  FiTrash2,
+  FiAlertCircle
 } from 'react-icons/fi';
 import CustomerModal from '../components/customers/CustomerModal';
 import PurchaseHistoryModal from '../components/customers/PurchaseHistoryModal';
-import { searchCustomers } from '../utils/customerQueries';
+import { searchCustomers, deleteCustomer } from '../utils/customerQueries';
+import { useAuth } from '../contexts/AuthContext';
 
 export default function Customers() {
   const [customers, setCustomers] = useState([]);
@@ -18,6 +20,9 @@ export default function Customers() {
   const [isPurchaseHistoryOpen, setIsPurchaseHistoryOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [customerToDelete, setCustomerToDelete] = useState(null);
+  const { currentUser } = useAuth();
 
   useEffect(() => {
     fetchCustomers();
@@ -53,6 +58,22 @@ export default function Customers() {
   const handleAdd = () => {
     setSelectedCustomer(null);
     setIsCustomerModalOpen(true);
+  };
+
+  const handleDeleteClick = (customer) => {
+    setCustomerToDelete(customer);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    try {
+      await deleteCustomer(customerToDelete.id);
+      setDeleteConfirmOpen(false);
+      setCustomerToDelete(null);
+      fetchCustomers();
+    } catch (error) {
+      console.error('Error deleting customer:', error);
+    }
   };
 
   return (
@@ -171,6 +192,14 @@ export default function Customers() {
                         >
                           <FiEdit2 className="w-5 h-5" />
                         </button>
+                        {currentUser?.role === 'manager' && (
+                          <button
+                            onClick={() => handleDeleteClick(customer)}
+                            className="text-gray-600 hover:text-red-600"
+                          >
+                            <FiTrash2 className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </motion.tr>
@@ -193,6 +222,43 @@ export default function Customers() {
         onClose={() => setIsPurchaseHistoryOpen(false)}
         customer={selectedCustomer}
       />
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+          >
+            <div className="flex items-center mb-4">
+              <FiAlertCircle className="text-red-600 w-6 h-6 mr-2" />
+              <h3 className="text-lg font-medium text-gray-900">
+                Delete Customer
+              </h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Are you sure you want to delete {customerToDelete?.name}? This action
+              cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+              >
+                Delete
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 } 

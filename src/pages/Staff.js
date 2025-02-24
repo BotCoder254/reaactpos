@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  FiUsers,
   FiUserPlus,
   FiEdit2,
   FiTrash2,
+  FiAlertCircle,
   FiActivity,
-  FiSearch
+  FiShield
 } from 'react-icons/fi';
-import { getUsers } from '../utils/userQueries';
-import UserModal from '../components/staff/UserModal';
-import ActivityLogModal from '../components/staff/ActivityLogModal';
 import { useAuth } from '../contexts/AuthContext';
+import UserModal from '../components/users/UserModal';
+import UserActivityLogModal from '../components/users/UserActivityLogModal';
+import { getUsers, deleteUserAccount } from '../utils/userQueries';
 
 export default function Staff() {
   const [users, setUsers] = useState([]);
@@ -19,8 +19,9 @@ export default function Staff() {
   const [isUserModalOpen, setIsUserModalOpen] = useState(false);
   const [isActivityLogOpen, setIsActivityLogOpen] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const { userRole } = useAuth();
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [userToDelete, setUserToDelete] = useState(null);
+  const { currentUser, userRole } = useAuth();
 
   useEffect(() => {
     fetchUsers();
@@ -28,6 +29,7 @@ export default function Staff() {
 
   async function fetchUsers() {
     try {
+      setLoading(true);
       const data = await getUsers();
       setUsers(data);
     } catch (error) {
@@ -36,11 +38,6 @@ export default function Staff() {
       setLoading(false);
     }
   }
-
-  const filteredUsers = users.filter(user =>
-    (user.email?.toLowerCase() || '').includes(searchTerm.toLowerCase()) ||
-    (user.role?.toLowerCase() || '').includes(searchTerm.toLowerCase())
-  );
 
   const handleEdit = (user) => {
     setSelectedUser(user);
@@ -57,6 +54,38 @@ export default function Staff() {
     setIsUserModalOpen(true);
   };
 
+  const handleDeleteClick = (user) => {
+    setUserToDelete(user);
+    setDeleteConfirmOpen(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    try {
+      await deleteUserAccount(userToDelete.id);
+      setDeleteConfirmOpen(false);
+      setUserToDelete(null);
+      fetchUsers();
+    } catch (error) {
+      console.error('Error deleting user:', error);
+    }
+  };
+
+  if (userRole !== 'manager') {
+    return (
+      <div className="p-6">
+        <div className="text-center">
+          <FiShield className="mx-auto h-12 w-12 text-gray-400" />
+          <h3 className="mt-2 text-sm font-medium text-gray-900">
+            Access Restricted
+          </h3>
+          <p className="mt-1 text-sm text-gray-500">
+            You don't have permission to access this page.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
       <div className="flex justify-between items-center mb-6">
@@ -68,19 +97,6 @@ export default function Staff() {
           <FiUserPlus className="mr-2 -ml-1 h-5 w-5" />
           Add Staff
         </button>
-      </div>
-
-      <div className="mb-6">
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search staff..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
-          />
-          <FiSearch className="absolute left-3 top-3 text-gray-400" />
-        </div>
       </div>
 
       {loading ? (
@@ -107,10 +123,7 @@ export default function Staff() {
                   Role
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Status
-                </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  Last Active
+                  Created At
                 </th>
                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Actions
@@ -119,7 +132,7 @@ export default function Staff() {
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
               <AnimatePresence>
-                {filteredUsers.map((user) => (
+                {users.map((user) => (
                   <motion.tr
                     key={user.id}
                     initial={{ opacity: 0 }}
@@ -131,35 +144,27 @@ export default function Staff() {
                         <div className="flex-shrink-0 h-10 w-10">
                           <div className="h-10 w-10 rounded-full bg-primary-100 flex items-center justify-center">
                             <span className="text-primary-600 font-medium">
-                              {user.email?.[0]?.toUpperCase() || '?'}
+                              {user.name?.[0]?.toUpperCase() || user.email?.[0]?.toUpperCase() || '?'}
                             </span>
                           </div>
                         </div>
                         <div className="ml-4">
                           <div className="text-sm font-medium text-gray-900">
-                            {user.email || 'No email'}
+                            {user.name || 'N/A'}
                           </div>
+                          <div className="text-sm text-gray-500">{user.email}</div>
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-primary-100 text-primary-800">
-                        {user.role || 'Unknown'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          user.status === 'active'
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}
-                      >
-                        {user.status || 'Unknown'}
+                      <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        {user.role}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {user.updatedAt?.seconds ? new Date(user.updatedAt.seconds * 1000).toLocaleDateString() : 'Never'}
+                      {user.createdAt
+                        ? new Date(user.createdAt.seconds * 1000).toLocaleDateString()
+                        : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
@@ -175,6 +180,14 @@ export default function Staff() {
                         >
                           <FiEdit2 className="w-5 h-5" />
                         </button>
+                        {user.id !== currentUser.uid && (
+                          <button
+                            onClick={() => handleDeleteClick(user)}
+                            className="text-gray-600 hover:text-red-600"
+                          >
+                            <FiTrash2 className="w-5 h-5" />
+                          </button>
+                        )}
                       </div>
                     </td>
                   </motion.tr>
@@ -192,11 +205,46 @@ export default function Staff() {
         onRefetch={fetchUsers}
       />
 
-      <ActivityLogModal
+      <UserActivityLogModal
         isOpen={isActivityLogOpen}
         onClose={() => setIsActivityLogOpen(false)}
-        user={selectedUser}
+        userId={selectedUser?.id}
       />
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+          >
+            <div className="flex items-center mb-4">
+              <FiAlertCircle className="text-red-600 w-6 h-6 mr-2" />
+              <h3 className="text-lg font-medium text-gray-900">Delete Staff</h3>
+            </div>
+            <p className="text-sm text-gray-500 mb-4">
+              Are you sure you want to delete {userToDelete?.name || userToDelete?.email}? This action
+              cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteConfirmOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirm}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+              >
+                Delete
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </div>
   );
 } 

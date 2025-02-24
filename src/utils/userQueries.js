@@ -1,23 +1,30 @@
-import { db } from '../config/firebase';
+import { db, auth } from '../config/firebase';
 import {
   collection,
   doc,
   addDoc,
   updateDoc,
   deleteDoc,
-  getDocs,
   query,
   where,
+  getDocs,
   orderBy,
-  serverTimestamp,
+  limit,
+  serverTimestamp
 } from 'firebase/firestore';
+import {
+  createUserWithEmailAndPassword,
+  updateEmail,
+  deleteUser,
+  signInWithEmailAndPassword
+} from 'firebase/auth';
 
 // Get all users
 export async function getUsers() {
   try {
     const q = query(
       collection(db, 'users'),
-      orderBy('createdAt', 'desc')
+      orderBy('email')
     );
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
@@ -33,12 +40,30 @@ export async function getUsers() {
 // Add a new user
 export async function addUser(userData) {
   try {
+    // Create auth user
+    const userCredential = await createUserWithEmailAndPassword(
+      auth,
+      userData.email,
+      userData.password
+    );
+
+    // Add user to Firestore
     const docRef = await addDoc(collection(db, 'users'), {
-      ...userData,
+      uid: userCredential.user.uid,
+      email: userData.email,
+      role: userData.role,
+      name: userData.name,
       createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      status: 'active'
+      updatedAt: serverTimestamp()
     });
+
+    // Log activity
+    await logUserActivity({
+      action: 'user_created',
+      targetUserId: docRef.id,
+      details: `Created user ${userData.email} with role ${userData.role}`
+    });
+
     return docRef.id;
   } catch (error) {
     console.error('Error adding user:', error);
@@ -50,9 +75,22 @@ export async function addUser(userData) {
 export async function updateUser(userId, userData) {
   try {
     const userRef = doc(db, 'users', userId);
+    
+    // If email is being updated, update in Auth
+    if (userData.email) {
+      await updateEmail(auth.currentUser, userData.email);
+    }
+
     await updateDoc(userRef, {
       ...userData,
       updatedAt: serverTimestamp()
+    });
+
+    // Log activity
+    await logUserActivity({
+      action: 'user_updated',
+      targetUserId: userId,
+      details: `Updated user ${userData.email}`
     });
   } catch (error) {
     console.error('Error updating user:', error);
@@ -61,9 +99,26 @@ export async function updateUser(userId, userData) {
 }
 
 // Delete a user
-export async function deleteUser(userId) {
+export async function deleteUserAccount(userId) {
   try {
-    await deleteDoc(doc(db, 'users', userId));
+    const userRef = doc(db, 'users', userId);
+    const userDoc = await userRef.get();
+    const userData = userDoc.data();
+
+    // Delete from Auth
+    if (userData.uid) {
+      await deleteUser(auth.currentUser);
+    }
+
+    // Delete from Firestore
+    await deleteDoc(userRef);
+
+    // Log activity
+    await logUserActivity({
+      action: 'user_deleted',
+      targetUserId: userId,
+      details: `Deleted user ${userData.email}`
+    });
   } catch (error) {
     console.error('Error deleting user:', error);
     throw error;
@@ -76,23 +131,26 @@ export async function getUserActivityLogs(userId = null) {
     let q;
     if (userId) {
       q = query(
-        collection(db, 'activityLogs'),
+        collection(db, 'userActivity'),
         where('userId', '==', userId),
-        orderBy('timestamp', 'desc')
+        orderBy('timestamp', 'desc'),
+        limit(100)
       );
     } else {
       q = query(
-        collection(db, 'activityLogs'),
-        orderBy('timestamp', 'desc')
+        collection(db, 'userActivity'),
+        orderBy('timestamp', 'desc'),
+        limit(100)
       );
     }
+
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
   } catch (error) {
-    console.error('Error getting activity logs:', error);
+    console.error('Error getting user activity logs:', error);
     throw error;
   }
 }
@@ -100,12 +158,14 @@ export async function getUserActivityLogs(userId = null) {
 // Log user activity
 export async function logUserActivity(activityData) {
   try {
-    await addDoc(collection(db, 'activityLogs'), {
+    await addDoc(collection(db, 'userActivity'), {
       ...activityData,
+      userId: auth.currentUser?.uid,
+      userEmail: auth.currentUser?.email,
       timestamp: serverTimestamp()
     });
   } catch (error) {
-    console.error('Error logging activity:', error);
+    console.error('Error logging user activity:', error);
     throw error;
   }
-} 
+}
