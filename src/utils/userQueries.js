@@ -51,8 +51,8 @@ export async function addUser(userData) {
     const docRef = await addDoc(collection(db, 'users'), {
       uid: userCredential.user.uid,
       email: userData.email,
+      name: userData.name || userData.email.split('@')[0],
       role: userData.role,
-      name: userData.name,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp()
     });
