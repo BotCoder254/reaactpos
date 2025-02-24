@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiDownload,
   FiDollarSign,
   FiShoppingBag,
   FiUsers,
-  FiRefreshCw
+  FiRefreshCw,
+  FiTrendingUp
 } from 'react-icons/fi';
 import {
   LineChart,
@@ -17,14 +18,21 @@ import {
   Legend,
   ResponsiveContainer,
   BarChart,
-  Bar
+  Bar,
+  PieChart,
+  Pie,
+  Cell
 } from 'recharts';
+import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { db } from '../config/firebase';
 import {
   getSalesReport,
   getTopProducts,
   getCashierPerformance,
   exportSalesReport
 } from '../utils/reportQueries';
+
+const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444'];
 
 const Reports = () => {
   const [dateRange, setDateRange] = useState('month');
@@ -42,23 +50,101 @@ const Reports = () => {
   
   const [topProducts, setTopProducts] = useState([]);
   const [cashierStats, setCashierStats] = useState([]);
+  const [realtimeData, setRealtimeData] = useState([]);
 
   useEffect(() => {
     fetchReportData();
+    // Set up real-time listener
+    const unsubscribe = setupRealtimeListener();
+    return () => unsubscribe();
   }, [dateRange, cashierId, productCategory]);
+
+  const setupRealtimeListener = () => {
+    const now = new Date();
+    let startDate;
+
+    switch (dateRange) {
+      case 'today':
+        startDate = new Date(now.setHours(0, 0, 0, 0));
+        break;
+      case 'week':
+        startDate = new Date(now.setDate(now.getDate() - 7));
+        break;
+      case 'month':
+        startDate = new Date(now.setMonth(now.getMonth() - 1));
+        break;
+      case 'year':
+        startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+        break;
+      default:
+        startDate = new Date(now.setDate(now.getDate() - 30));
+    }
+
+    const constraints = [
+      where('timestamp', '>=', Timestamp.fromDate(startDate)),
+      orderBy('timestamp', 'desc')
+    ];
+
+    if (cashierId !== 'all') {
+      constraints.push(where('cashierId', '==', cashierId));
+    }
+
+    if (productCategory !== 'all') {
+      constraints.push(where('items.category', '==', productCategory));
+    }
+
+    const q = query(collection(db, 'sales'), ...constraints);
+
+    return onSnapshot(q, (snapshot) => {
+      const sales = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+
+      // Process real-time data
+      const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
+      const totalItems = sales.reduce((sum, sale) => sum + sale.items.length, 0);
+      const uniqueCustomers = new Set(sales.map(sale => sale.customerId)).size;
+
+      // Update real-time data
+      setRealtimeData(sales);
+      setReportData(prev => ({
+        ...prev,
+        totalSales,
+        totalItems,
+        totalCustomers: uniqueCustomers
+      }));
+
+      // Update sales trend
+      const salesByDate = sales.reduce((acc, sale) => {
+        const date = new Date(sale.timestamp.seconds * 1000).toLocaleDateString();
+        acc[date] = (acc[date] || 0) + sale.total;
+        return acc;
+      }, {});
+
+      setReportData(prev => ({
+        ...prev,
+        salesTrend: Object.entries(salesByDate).map(([date, total]) => ({
+          date,
+          total
+        }))
+      }));
+    }, (error) => {
+      console.error('Error in real-time listener:', error);
+      setError('Failed to get real-time updates');
+    });
+  };
 
   const fetchReportData = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const [sales, products, cashiers] = await Promise.all([
-        getSalesReport(dateRange, cashierId, productCategory),
+      const [products, cashiers] = await Promise.all([
         getTopProducts(dateRange),
         getCashierPerformance(dateRange)
       ]);
 
-      setReportData(sales);
       setTopProducts(products);
       setCashierStats(cashiers);
     } catch (err) {
@@ -81,7 +167,7 @@ const Reports = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
-        <FiRefreshCw className="w-8 h-8 animate-spin text-primary" />
+        <FiRefreshCw className="w-8 h-8 animate-spin text-primary-600" />
       </div>
     );
   }
@@ -101,12 +187,12 @@ const Reports = () => {
       className="p-6 max-w-7xl mx-auto"
     >
       <div className="flex justify-between items-center mb-8">
-        <h1 className="text-2xl font-bold">Sales Reports</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Sales Reports</h1>
         <button
           onClick={handleExport}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors"
         >
-          <FiDownload />
+          <FiDownload className="w-5 h-5" />
           Export Report
         </button>
       </div>
@@ -116,7 +202,7 @@ const Reports = () => {
         <select
           value={dateRange}
           onChange={(e) => setDateRange(e.target.value)}
-          className="p-2 border rounded-lg"
+          className="p-2 border rounded-lg focus:ring-primary-500 focus:border-primary-500"
         >
           <option value="today">Today</option>
           <option value="week">Last 7 Days</option>
@@ -127,7 +213,7 @@ const Reports = () => {
         <select
           value={cashierId}
           onChange={(e) => setCashierId(e.target.value)}
-          className="p-2 border rounded-lg"
+          className="p-2 border rounded-lg focus:ring-primary-500 focus:border-primary-500"
         >
           <option value="all">All Cashiers</option>
           {cashierStats.map(cashier => (
@@ -140,7 +226,7 @@ const Reports = () => {
         <select
           value={productCategory}
           onChange={(e) => setProductCategory(e.target.value)}
-          className="p-2 border rounded-lg"
+          className="p-2 border rounded-lg focus:ring-primary-500 focus:border-primary-500"
         >
           <option value="all">All Categories</option>
           <option value="food">Food</option>
@@ -151,65 +237,100 @@ const Reports = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          className="p-6 bg-white rounded-lg shadow-md"
-        >
-          <div className="flex items-center gap-4">
-            <FiDollarSign className="w-8 h-8 text-primary" />
-            <div>
-              <h3 className="text-lg font-semibold">Total Sales</h3>
-              <p className="text-2xl font-bold">
-                ${reportData.totalSales.toFixed(2)}
-              </p>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key="sales"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            whileHover={{ scale: 1.02 }}
+            className="p-6 bg-white rounded-lg shadow-md"
+          >
+            <div className="flex items-center gap-4">
+              <FiDollarSign className="w-8 h-8 text-primary-600" />
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Total Sales</h3>
+                <p className="text-2xl font-bold text-primary-600">
+                  ${reportData.totalSales.toFixed(2)}
+                </p>
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
 
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          className="p-6 bg-white rounded-lg shadow-md"
-        >
-          <div className="flex items-center gap-4">
-            <FiShoppingBag className="w-8 h-8 text-primary" />
-            <div>
-              <h3 className="text-lg font-semibold">Items Sold</h3>
-              <p className="text-2xl font-bold">{reportData.totalItems}</p>
+          <motion.div
+            key="items"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            whileHover={{ scale: 1.02 }}
+            className="p-6 bg-white rounded-lg shadow-md"
+          >
+            <div className="flex items-center gap-4">
+              <FiShoppingBag className="w-8 h-8 text-primary-600" />
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Items Sold</h3>
+                <p className="text-2xl font-bold text-primary-600">
+                  {reportData.totalItems}
+                </p>
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
 
-        <motion.div
-          whileHover={{ scale: 1.02 }}
-          className="p-6 bg-white rounded-lg shadow-md"
-        >
-          <div className="flex items-center gap-4">
-            <FiUsers className="w-8 h-8 text-primary" />
-            <div>
-              <h3 className="text-lg font-semibold">Total Customers</h3>
-              <p className="text-2xl font-bold">{reportData.totalCustomers}</p>
+          <motion.div
+            key="customers"
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            whileHover={{ scale: 1.02 }}
+            className="p-6 bg-white rounded-lg shadow-md"
+          >
+            <div className="flex items-center gap-4">
+              <FiUsers className="w-8 h-8 text-primary-600" />
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900">Total Customers</h3>
+                <p className="text-2xl font-bold text-primary-600">
+                  {reportData.totalCustomers}
+                </p>
+              </div>
             </div>
-          </div>
-        </motion.div>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {/* Sales Trend Chart */}
       <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Sales Trend</h2>
+        <h2 className="text-xl font-semibold mb-4 text-gray-900">Sales Trend</h2>
         <div className="bg-white p-4 rounded-lg shadow-md" style={{ height: '400px' }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={reportData.salesTrend}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" />
-              <YAxis />
-              <Tooltip />
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis
+                dataKey="date"
+                stroke="#6B7280"
+                tick={{ fill: '#6B7280' }}
+              />
+              <YAxis
+                stroke="#6B7280"
+                tick={{ fill: '#6B7280' }}
+                tickFormatter={(value) => `$${value}`}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: '#FFF',
+                  border: '1px solid #E5E7EB',
+                  borderRadius: '0.5rem'
+                }}
+                formatter={(value) => [`$${value}`, 'Sales']}
+              />
               <Legend />
               <Line
                 type="monotone"
                 dataKey="total"
+                name="Sales"
                 stroke="#4F46E5"
                 strokeWidth={2}
                 dot={false}
+                activeDot={{ r: 8 }}
               />
             </LineChart>
           </ResponsiveContainer>
@@ -217,45 +338,110 @@ const Reports = () => {
       </div>
 
       {/* Top Products Chart */}
-      <div className="mb-8">
-        <h2 className="text-xl font-semibold mb-4">Top Products</h2>
-        <div className="bg-white p-4 rounded-lg shadow-md" style={{ height: '400px' }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={topProducts}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="name" />
-              <YAxis />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="revenue" fill="#4F46E5" name="Revenue" />
-              <Bar dataKey="quantity" fill="#10B981" name="Quantity" />
-            </BarChart>
-          </ResponsiveContainer>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+        <div>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Top Products</h2>
+          <div className="bg-white p-4 rounded-lg shadow-md" style={{ height: '400px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={topProducts}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis
+                  dataKey="name"
+                  stroke="#6B7280"
+                  tick={{ fill: '#6B7280' }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                />
+                <YAxis
+                  stroke="#6B7280"
+                  tick={{ fill: '#6B7280' }}
+                  tickFormatter={(value) => `$${value}`}
+                />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#FFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '0.5rem'
+                  }}
+                  formatter={(value) => [`$${value}`, 'Revenue']}
+                />
+                <Legend />
+                <Bar
+                  dataKey="revenue"
+                  name="Revenue"
+                  fill="#4F46E5"
+                  radius={[4, 4, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        <div>
+          <h2 className="text-xl font-semibold mb-4 text-gray-900">Sales Distribution</h2>
+          <div className="bg-white p-4 rounded-lg shadow-md" style={{ height: '400px' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={topProducts.slice(0, 4)}
+                  dataKey="revenue"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={150}
+                  fill="#8884d8"
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {topProducts.slice(0, 4).map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#FFF',
+                    border: '1px solid #E5E7EB',
+                    borderRadius: '0.5rem'
+                  }}
+                  formatter={(value) => [`$${value}`, 'Revenue']}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
         </div>
       </div>
 
       {/* Cashier Performance */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Cashier Performance</h2>
-        <div className="overflow-x-auto">
-          <table className="w-full bg-white rounded-lg shadow-md">
+        <h2 className="text-xl font-semibold mb-4 text-gray-900">Cashier Performance</h2>
+        <div className="overflow-x-auto bg-white rounded-lg shadow-md">
+          <table className="w-full">
             <thead>
               <tr className="bg-gray-50">
-                <th className="p-4 text-left">Name</th>
-                <th className="p-4 text-left">Total Sales</th>
-                <th className="p-4 text-left">Transactions</th>
-                <th className="p-4 text-left">Avg. Transaction</th>
+                <th className="p-4 text-left text-gray-900">Name</th>
+                <th className="p-4 text-left text-gray-900">Total Sales</th>
+                <th className="p-4 text-left text-gray-900">Transactions</th>
+                <th className="p-4 text-left text-gray-900">Avg. Transaction</th>
               </tr>
             </thead>
             <tbody>
-              {cashierStats.map((cashier) => (
-                <tr key={cashier.id} className="border-t">
-                  <td className="p-4">{cashier.name}</td>
-                  <td className="p-4">${cashier.totalSales.toFixed(2)}</td>
-                  <td className="p-4">{cashier.transactionCount}</td>
-                  <td className="p-4">${cashier.averageTransaction.toFixed(2)}</td>
-                </tr>
-              ))}
+              <AnimatePresence>
+                {cashierStats.map((cashier, index) => (
+                  <motion.tr
+                    key={cashier.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ delay: index * 0.1 }}
+                    className="border-t border-gray-200"
+                  >
+                    <td className="p-4 text-gray-900">{cashier.name}</td>
+                    <td className="p-4 text-gray-900">${cashier.totalSales.toFixed(2)}</td>
+                    <td className="p-4 text-gray-900">{cashier.transactionCount}</td>
+                    <td className="p-4 text-gray-900">${cashier.averageTransaction.toFixed(2)}</td>
+                  </motion.tr>
+                ))}
+              </AnimatePresence>
             </tbody>
           </table>
         </div>
