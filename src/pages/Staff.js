@@ -21,6 +21,7 @@ export default function Staff() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const { currentUser, userRole } = useAuth();
 
   useEffect(() => {
@@ -61,12 +62,15 @@ export default function Staff() {
 
   const handleDeleteConfirm = async () => {
     try {
+      setIsDeleting(true);
       await deleteUserAccount(userToDelete.id);
       setDeleteConfirmOpen(false);
       setUserToDelete(null);
       fetchUsers();
     } catch (error) {
       console.error('Error deleting user:', error);
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -231,15 +235,27 @@ export default function Staff() {
             <div className="flex justify-end space-x-3">
               <button
                 onClick={() => setDeleteConfirmOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md"
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 border border-gray-300 rounded-md disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDeleteConfirm}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md"
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-md flex items-center disabled:opacity-50"
               >
-                Delete
+                {isDeleting ? (
+                  <>
+                    <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Deleting...
+                  </>
+                ) : (
+                  'Delete'
+                )}
               </button>
             </div>
           </motion.div>
