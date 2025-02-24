@@ -10,7 +10,8 @@ import {
   getDocs,
   orderBy,
   limit,
-  serverTimestamp
+  serverTimestamp,
+  getDoc
 } from 'firebase/firestore';
 import {
   createUserWithEmailAndPassword,
@@ -102,23 +103,20 @@ export async function updateUser(userId, userData) {
 export async function deleteUserAccount(userId) {
   try {
     const userRef = doc(db, 'users', userId);
-    const userDoc = await userRef.get();
-    const userData = userDoc.data();
+    const userSnap = await getDoc(userRef);
+    const userData = userSnap.data();
 
-    // Delete from Auth
-    if (userData.uid) {
-      await deleteUser(auth.currentUser);
-    }
-
-    // Delete from Firestore
+    // Delete from Firestore first
     await deleteDoc(userRef);
 
     // Log activity
     await logUserActivity({
       action: 'user_deleted',
       targetUserId: userId,
-      details: `Deleted user ${userData.email}`
+      details: `Deleted user ${userData?.email || 'Unknown'}`
     });
+
+    return true;
   } catch (error) {
     console.error('Error deleting user:', error);
     throw error;

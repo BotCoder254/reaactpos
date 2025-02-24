@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiSave } from 'react-icons/fi';
+import { FiX, FiSave, FiLock, FiUser } from 'react-icons/fi';
 import { addUser, updateUser } from '../../utils/userQueries';
 
 export default function UserModal({ isOpen, onClose, user, onRefetch }) {
@@ -85,45 +85,60 @@ export default function UserModal({ isOpen, onClose, user, onRefetch }) {
               <label className="block text-sm font-medium text-gray-700">
                 Email
               </label>
-              <input
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                required
-              />
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiUser className="text-gray-400" />
+                </div>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  className="pl-10 block w-full h-10 border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  required
+                />
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Password {user && '(leave blank to keep current)'}
               </label>
-              <input
-                type="password"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                {...(!user && { required: true })}
-              />
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiLock className="text-gray-400" />
+                </div>
+                <input
+                  type="password"
+                  required={!user}
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  className="pl-10 block w-full h-10 border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                />
+              </div>
             </div>
 
             <div>
               <label className="block text-sm font-medium text-gray-700">
                 Name
               </label>
-              <input
-                type="text"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
-                required
-              />
+              <div className="mt-1 relative rounded-md shadow-sm">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <FiUser className="text-gray-400" />
+                </div>
+                <input
+                  type="text"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  className="pl-10 block w-full h-10 border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  required
+                />
+              </div>
             </div>
 
             <div>
@@ -135,7 +150,7 @@ export default function UserModal({ isOpen, onClose, user, onRefetch }) {
                 onChange={(e) =>
                   setFormData({ ...formData, role: e.target.value })
                 }
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                className="mt-1 block w-full h-10 border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
               >
                 <option value="cashier">Cashier</option>
                 <option value="manager">Manager</option>
