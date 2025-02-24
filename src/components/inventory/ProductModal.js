@@ -137,7 +137,7 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 />
               </div>
 
@@ -152,7 +152,7 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                   onChange={(e) =>
                     setFormData({ ...formData, category: e.target.value })
                   }
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 />
               </div>
 
@@ -170,7 +170,7 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                     onChange={(e) =>
                       setFormData({ ...formData, price: e.target.value })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                    className="mt-1 block w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                   />
                 </div>
 
@@ -186,7 +186,7 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                     onChange={(e) =>
                       setFormData({ ...formData, stock: e.target.value })
                     }
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                    className="mt-1 block w-full h-10 rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                   />
                 </div>
               </div>
@@ -201,7 +201,7 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                     setFormData({ ...formData, description: e.target.value })
                   }
                   rows={3}
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                  className="mt-1 block w-full min-h-[80px] rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
                 />
               </div>
 

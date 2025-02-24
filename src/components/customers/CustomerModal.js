@@ -112,7 +112,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onRefetch }) 
                     onChange={(e) =>
                       setFormData({ ...formData, name: e.target.value })
                     }
-                    className="pl-10 block w-full border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    className="pl-10 block w-full h-10 border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
               </div>
@@ -132,7 +132,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onRefetch }) 
                     onChange={(e) =>
                       setFormData({ ...formData, phone: e.target.value })
                     }
-                    className="pl-10 block w-full border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    className="pl-10 block w-full h-10 border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
               </div>
@@ -151,7 +151,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onRefetch }) 
                     onChange={(e) =>
                       setFormData({ ...formData, email: e.target.value })
                     }
-                    className="pl-10 block w-full border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                    className="pl-10 block w-full h-10 border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                   />
                 </div>
               </div>
@@ -166,7 +166,7 @@ export default function CustomerModal({ isOpen, onClose, customer, onRefetch }) 
                     setFormData({ ...formData, address: e.target.value })
                   }
                   rows={3}
-                  className="mt-1 block w-full border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
+                  className="mt-1 block w-full min-h-[80px] border-gray-300 rounded-md focus:ring-primary-500 focus:border-primary-500"
                 />
               </div>
             </div>
