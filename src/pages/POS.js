@@ -10,12 +10,14 @@ import {
   FiImage,
   FiUser,
   FiUserPlus,
-  FiX
+  FiX,
+  FiTag
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { getProducts } from '../utils/inventoryQueries';
 import { createSale, emailReceipt } from '../utils/salesQueries';
 import { searchCustomers, quickSearchCustomers, updateCustomerAfterPurchase } from '../utils/customerQueries';
+import { getActiveDiscounts, calculateDiscount } from '../utils/discountQueries';
 import CustomerModal from '../components/customers/CustomerModal';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
@@ -32,6 +34,9 @@ export default function POS() {
   const [customerSearchTerm, setCustomerSearchTerm] = useState('');
   const [customerResults, setCustomerResults] = useState([]);
   const [showCustomerSearch, setShowCustomerSearch] = useState(false);
+  const [activeDiscounts, setActiveDiscounts] = useState([]);
+  const [selectedDiscount, setSelectedDiscount] = useState(null);
+  const [discountAmount, setDiscountAmount] = useState(0);
   const { currentUser } = useAuth();
 
   useEffect(() => {
@@ -53,6 +58,28 @@ export default function POS() {
 
     fetchProducts();
   }, []);
+
+  useEffect(() => {
+    const fetchDiscounts = async () => {
+      try {
+        const discounts = await getActiveDiscounts();
+        setActiveDiscounts(discounts);
+      } catch (error) {
+        console.error('Error fetching discounts:', error);
+      }
+    };
+
+    fetchDiscounts();
+  }, []);
+
+  useEffect(() => {
+    if (selectedDiscount) {
+      const amount = calculateDiscount(calculateTotal(), selectedDiscount);
+      setDiscountAmount(amount);
+    } else {
+      setDiscountAmount(0);
+    }
+  }, [selectedDiscount, cart]);
 
   useEffect(() => {
     setFilteredProducts(
@@ -116,18 +143,31 @@ export default function POS() {
   };
 
   const calculateTax = () => {
-    return calculateTotal() * 0.1; // 10% tax
+    const subtotal = calculateTotal() - discountAmount;
+    return subtotal * 0.1; // 10% tax
+  };
+
+  const handleDiscountSelect = (discount) => {
+    if (selectedDiscount?.id === discount.id) {
+      setSelectedDiscount(null);
+    } else {
+      setSelectedDiscount(discount);
+    }
   };
 
   const handleCheckout = async (paymentMethod) => {
     try {
       setProcessing(true);
       
+      const subtotal = calculateTotal();
       const saleData = {
         items: cart,
-        subtotal: calculateTotal(),
+        subtotal: subtotal,
+        discount: discountAmount,
+        discountId: selectedDiscount?.id,
+        discountName: selectedDiscount?.name,
         tax: calculateTax(),
-        total: calculateTotal() + calculateTax(),
+        total: subtotal - discountAmount + calculateTax(),
         paymentMethod,
         cashierId: currentUser.uid,
         cashierName: currentUser.email,
@@ -148,9 +188,11 @@ export default function POS() {
         );
       }
 
-      // Clear cart and customer selection
+      // Clear cart, customer selection, and discount
       setCart([]);
       setSelectedCustomer(null);
+      setSelectedDiscount(null);
+      setDiscountAmount(0);
       
       // Show success message
       alert('Sale completed successfully!');
@@ -318,6 +360,47 @@ export default function POS() {
               </div>
             )}
           </div>
+
+          {/* Available Discounts */}
+          {activeDiscounts.length > 0 && (
+            <div className="mt-4">
+              <h3 className="text-sm font-medium text-gray-700 mb-2">Available Discounts</h3>
+              <div className="space-y-2">
+                {activeDiscounts.map((discount) => (
+                  <button
+                    key={discount.id}
+                    onClick={() => handleDiscountSelect(discount)}
+                    className={`w-full flex items-center justify-between p-2 rounded-md text-left ${
+                      selectedDiscount?.id === discount.id
+                        ? 'bg-primary-50 border-primary-200'
+                        : 'bg-gray-50 border-gray-200'
+                    } border hover:bg-gray-100`}
+                  >
+                    <div className="flex items-center">
+                      <FiTag className="h-5 w-5 text-primary-500 mr-2" />
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {discount.name}
+                        </p>
+                        <p className="text-xs text-gray-500">
+                          {discount.type === 'percentage'
+                            ? `${discount.value}% off`
+                            : 'Buy One Get One Free'}
+                          {discount.minPurchase > 0 &&
+                            ` (Min. $${discount.minPurchase})`}
+                        </p>
+                      </div>
+                    </div>
+                    {selectedDiscount?.id === discount.id && (
+                      <span className="text-xs font-medium text-primary-600">
+                        Applied
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="flex-1 overflow-auto p-6">
@@ -368,13 +451,19 @@ export default function POS() {
               <span>Subtotal</span>
               <span>${calculateTotal().toFixed(2)}</span>
             </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between text-primary-600">
+                <span>Discount</span>
+                <span>-${discountAmount.toFixed(2)}</span>
+              </div>
+            )}
             <div className="flex justify-between">
               <span>Tax (10%)</span>
               <span>${calculateTax().toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span>${(calculateTotal() + calculateTax()).toFixed(2)}</span>
+              <span>${(calculateTotal() - discountAmount + calculateTax()).toFixed(2)}</span>
             </div>
           </div>
 
