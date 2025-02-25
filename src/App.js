@@ -19,6 +19,7 @@ import Analytics from './pages/Analytics';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import EmployeeStats from './pages/EmployeeStats';
+import StaffStats from './pages/StaffStats';
 
 function AppContent() {
   const location = useLocation();
@@ -43,6 +44,7 @@ function AppContent() {
               <Route path="/customers" element={<PrivateRoute><Customers /></PrivateRoute>} />
               <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
               <Route path="/staff" element={<PrivateRoute><Staff /></PrivateRoute>} />
+              <Route path="/staff-stats" element={<PrivateRoute><StaffStats /></PrivateRoute>} />
               <Route path="/discounts" element={<PrivateRoute><Discounts /></PrivateRoute>} />
               <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
               <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />

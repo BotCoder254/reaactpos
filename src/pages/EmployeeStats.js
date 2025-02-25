@@ -11,24 +11,29 @@ export default function EmployeeStats() {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
   const [userRole, setUserRole] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchUserRole = async () => {
-      if (currentUser) {
-        try {
-          const userRef = collection(db, 'users');
-          const q = query(userRef, where('uid', '==', currentUser.uid));
-          const querySnapshot = await getDocs(q);
-          
-          if (!querySnapshot.empty) {
-            const userData = querySnapshot.docs[0].data();
-            setUserRole(userData.role);
-          }
-        } catch (error) {
-          console.error('Error fetching user role:', error);
-        } finally {
-          setLoading(false);
+      if (!currentUser) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const userRef = collection(db, 'users');
+        const q = query(userRef, where('uid', '==', currentUser.uid));
+        const querySnapshot = await getDocs(q);
+        
+        if (!querySnapshot.empty) {
+          const userData = querySnapshot.docs[0].data();
+          setUserRole(userData.role);
         }
+      } catch (error) {
+        console.error('Error fetching user role:', error);
+        setError('Failed to fetch user role');
+      } finally {
+        setLoading(false);
       }
     };
 
@@ -45,8 +50,18 @@ export default function EmployeeStats() {
     );
   }
 
-  // Redirect if not authorized
-  if (!currentUser || (userRole !== 'manager' && userRole !== 'admin' && userRole !== 'cashier')) {
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="bg-red-50 border-l-4 border-red-400 p-4">
+          <p className="text-red-700">{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Only allow access to users with valid roles
+  if (!currentUser || !userRole || !['admin', 'manager', 'cashier'].includes(userRole)) {
     return <Navigate to="/" replace />;
   }
 
