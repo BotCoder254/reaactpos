@@ -17,6 +17,8 @@ import { getProducts } from '../utils/inventoryQueries';
 import { createSale, emailReceipt } from '../utils/salesQueries';
 import { searchCustomers, quickSearchCustomers, updateCustomerAfterPurchase } from '../utils/customerQueries';
 import CustomerModal from '../components/customers/CustomerModal';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export default function POS() {
   const [products, setProducts] = useState([]);
@@ -33,6 +35,22 @@ export default function POS() {
   const { currentUser } = useAuth();
 
   useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const productsCollection = collection(db, 'products');
+        const productsSnapshot = await getDocs(productsCollection);
+        const productsList = productsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }));
+        setProducts(productsList);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
     fetchProducts();
   }, []);
 
@@ -45,17 +63,6 @@ export default function POS() {
       )
     );
   }, [searchTerm, products]);
-
-  async function fetchProducts() {
-    try {
-      const data = await getProducts();
-      setProducts(data);
-    } catch (error) {
-      console.error('Error fetching products:', error);
-    } finally {
-      setLoading(false);
-    }
-  }
 
   const handleCustomerSearch = async (term) => {
     setCustomerSearchTerm(term);
@@ -172,6 +179,14 @@ export default function POS() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen bg-gray-100">
       {/* Products Section */}
@@ -189,55 +204,28 @@ export default function POS() {
           </div>
         </div>
 
-        {loading ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(6)].map((_, index) => (
-              <div
-                key={index}
-                className="bg-white p-4 rounded-lg shadow animate-pulse"
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+          {filteredProducts.map((product) => (
+            <div key={product.id} className="bg-white rounded-lg shadow p-4">
+              {product.imageUrl && (
+                <img
+                  src={product.imageUrl}
+                  alt={product.name}
+                  className="w-full h-48 object-cover rounded-lg mb-4"
+                />
+              )}
+              <h3 className="text-lg font-semibold">{product.name}</h3>
+              <p className="text-gray-600">${product.price}</p>
+              <p className="text-sm text-gray-500">Stock: {product.stock}</p>
+              <button
+                onClick={() => addToCart(product)}
+                className="mt-2 w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
               >
-                <div className="h-40 bg-gray-200 rounded-lg mb-4"></div>
-                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
-                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            <AnimatePresence>
-              {filteredProducts.map((product) => (
-                <motion.div
-                  key={product.id}
-                  layout
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  className="bg-white p-4 rounded-lg shadow cursor-pointer hover:shadow-md transition-shadow"
-                  onClick={() => addToCart(product)}
-                >
-                  {product.images && product.images.length > 0 ? (
-                    <img
-                      src={product.images[0]}
-                      alt={product.name}
-                      className="w-full h-40 object-cover rounded-lg mb-4"
-                    />
-                  ) : (
-                    <div className="w-full h-40 bg-gray-200 rounded-lg mb-4 flex items-center justify-center">
-                      <FiImage className="w-12 h-12 text-gray-400" />
-                    </div>
-                  )}
-                  <h3 className="text-lg font-semibold mb-1">{product.name}</h3>
-                  <p className="text-gray-600">${product.price.toFixed(2)}</p>
-                  {product.stock <= 10 && (
-                    <p className="text-sm text-red-600 mt-1">
-                      Low stock: {product.stock}
-                    </p>
-                  )}
-                </motion.div>
-              ))}
-            </AnimatePresence>
-          </div>
-        )}
+                Add to Cart
+              </button>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Cart Section */}

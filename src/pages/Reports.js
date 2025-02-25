@@ -23,7 +23,7 @@ import {
   Pie,
   Cell
 } from 'recharts';
-import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import {
   getSalesReport,

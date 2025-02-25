@@ -1,120 +1,67 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
+import Sidebar from './components/layout/Sidebar';
+import Dashboard from './pages/Dashboard';
+import Products from './pages/Products';
+import Staff from './pages/Staff';
+import Orders from './pages/Orders';
+import Checkout from './pages/Checkout';
+import Discounts from './pages/Discounts';
+import DiscountBanner from './components/discounts/DiscountBanner';
+import { AuthProvider } from './contexts/AuthContext';
+import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
-import Dashboard from './pages/Dashboard';
-import Inventory from './pages/Inventory';
 import POS from './pages/POS';
 import Sales from './pages/Sales';
-import Reports from './pages/Reports';
-import Analytics from './pages/Analytics';
-import Staff from './pages/Staff';
-import Settings from './pages/Settings';
 import Customers from './pages/Customers';
-import DashboardLayout from './components/layout/DashboardLayout';
+import Analytics from './pages/Analytics';
+import Reports from './pages/Reports';
+import Settings from './pages/Settings';
 
-// Protected Route Component
-function PrivateRoute({ children }) {
-  const { currentUser } = useAuth();
-  return currentUser ? (
-    <DashboardLayout>{children}</DashboardLayout>
-  ) : (
-    <Navigate to="/login" />
-  );
-}
+function AppContent() {
+  const location = useLocation();
+  const isAuthPage = ['/login', '/signup'].includes(location.pathname);
 
-// Manager Route Component
-function ManagerRoute({ children }) {
-  const { currentUser, userRole } = useAuth();
-  return currentUser && userRole === 'manager' ? (
-    <DashboardLayout>{children}</DashboardLayout>
-  ) : (
-    <Navigate to="/dashboard" />
-  );
-}
-
-export default function App() {
   return (
-    <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route
-            path="/dashboard"
-            element={
-              <PrivateRoute>
-                <Dashboard />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/pos"
-            element={
-              <PrivateRoute>
-                <POS />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/sales"
-            element={
-              <PrivateRoute>
-                <Sales />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/customers"
-            element={
-              <PrivateRoute>
-                <Customers />
-              </PrivateRoute>
-            }
-          />
-          <Route
-            path="/inventory"
-            element={
-              <ManagerRoute>
-                <Inventory />
-              </ManagerRoute>
-            }
-          />
-          <Route
-            path="/analytics"
-            element={
-              <ManagerRoute>
-                <Analytics />
-              </ManagerRoute>
-            }
-          />
-          <Route
-            path="/staff"
-            element={
-              <ManagerRoute>
-                <Staff />
-              </ManagerRoute>
-            }
-          />
-          <Route
-            path="/reports"
-            element={
-              <ManagerRoute>
-                <Reports />
-              </ManagerRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <PrivateRoute>
-                <Settings />
-              </PrivateRoute>
-            }
-          />
-          <Route path="/" element={<Navigate to="/login" />} />
-        </Routes>
-      </Router>
-    </AuthProvider>
+    <div className="flex h-screen bg-gray-100">
+      {!isAuthPage && <Sidebar />}
+      <div className={`flex-1 overflow-auto ${isAuthPage ? 'w-full' : ''}`}>
+        <Toaster position="top-right" />
+        {!isAuthPage && <DiscountBanner />}
+        <main className={`${isAuthPage ? '' : 'py-10'}`}>
+          <div className={`${isAuthPage ? '' : 'max-w-7xl mx-auto sm:px-6 lg:px-8'}`}>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+              <Route path="/pos" element={<PrivateRoute><POS /></PrivateRoute>} />
+              <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
+              <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
+              <Route path="/sales" element={<PrivateRoute><Sales /></PrivateRoute>} />
+              <Route path="/customers" element={<PrivateRoute><Customers /></PrivateRoute>} />
+              <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
+              <Route path="/staff" element={<PrivateRoute><Staff /></PrivateRoute>} />
+              <Route path="/discounts" element={<PrivateRoute><Discounts /></PrivateRoute>} />
+              <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
+              <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+              <Route path="/checkout" element={<Checkout />} />
+            </Routes>
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    </Router>
+  );
+}
+
+export default App;

@@ -11,32 +11,41 @@ import {
   ReceiptPercentIcon,
   DocumentTextIcon,
   UserGroupIcon,
+  ShoppingBagIcon,
+  TagIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { userRole } = useAuth();
+  const { currentUser, userRole } = useAuth();
   const location = useLocation();
 
+  // If user is not authenticated, don't render the sidebar
+  if (!currentUser) return null;
+
   const managerNavItems = [
-    { name: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
+    { name: 'Dashboard', icon: HomeIcon, path: '/' },
     { name: 'POS', icon: ShoppingCartIcon, path: '/pos' },
+    { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
+    { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
-    { name: 'Inventory', icon: ClipboardDocumentListIcon, path: '/inventory' },
     { name: 'Staff', icon: UsersIcon, path: '/staff' },
+    { name: 'Discounts', icon: TagIcon, path: '/discounts' },
     { name: 'Reports', icon: DocumentTextIcon, path: '/reports' },
-    { name: 'Settings', icon: CogIcon, path: '/settings' },
+    { name: 'Settings', icon: CogIcon, path: '/settings' }
   ];
 
   const cashierNavItems = [
-    { name: 'Dashboard', icon: HomeIcon, path: '/dashboard' },
+    { name: 'Dashboard', icon: HomeIcon, path: '/' },
     { name: 'POS', icon: ShoppingCartIcon, path: '/pos' },
+    { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
+    { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
-    { name: 'Settings', icon: CogIcon, path: '/settings' },
+    { name: 'Settings', icon: CogIcon, path: '/settings' }
   ];
 
   const navItems = userRole === 'manager' ? managerNavItems : cashierNavItems;

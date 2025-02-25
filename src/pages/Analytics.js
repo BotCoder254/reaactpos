@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   FiDownload,
@@ -27,7 +27,7 @@ import {
   AreaChart,
   Area
 } from 'recharts';
-import { collection, query, where, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
+import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs, limit } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import {
   getSalesReport,
@@ -35,6 +35,8 @@ import {
   getCashierPerformance,
   exportSalesReport
 } from '../utils/reportQueries';
+import { chartColors, defaultOptions } from '../utils/chartConfig';
+import { Line as ChartLine } from 'react-chartjs-2';
 
 const COLORS = ['#4F46E5', '#10B981', '#F59E0B', '#EF4444'];
 
@@ -54,12 +56,35 @@ export default function Analytics() {
   
   const [topProducts, setTopProducts] = useState([]);
   const [realtimeData, setRealtimeData] = useState([]);
+  const [salesData, setSalesData] = useState(null);
 
   useEffect(() => {
     fetchAnalyticsData();
     // Set up real-time listener
     const unsubscribe = setupRealtimeListener();
-    return () => unsubscribe();
+    const fetchSalesData = async () => {
+      try {
+        const salesCollection = collection(db, 'sales');
+        const salesQuery = query(salesCollection, orderBy('timestamp', 'desc'), limit(30));
+        const salesSnapshot = await getDocs(salesQuery);
+        const salesList = salesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          timestamp: doc.data().timestamp?.toDate() || new Date()
+        }));
+
+        // Process data for charts
+        const processedData = processDataForCharts(salesList);
+        setSalesData(processedData);
+      } catch (error) {
+        console.error('Error fetching sales data:', error);
+      }
+    };
+
+    fetchSalesData();
+    return () => {
+      unsubscribe();
+    };
   }, [dateRange]);
 
   const setupRealtimeListener = () => {
@@ -185,6 +210,29 @@ export default function Analytics() {
     }
   };
 
+  const processDataForCharts = (sales) => {
+    const dates = [...new Set(sales.map(sale => 
+      sale.timestamp.toISOString().split('T')[0]
+    ))].sort();
+
+    const dailyRevenue = dates.map(date => {
+      const daySales = sales.filter(sale => 
+        sale.timestamp.toISOString().split('T')[0] === date
+      );
+      return {
+        date,
+        revenue: daySales.reduce((sum, sale) => sum + (sale.total || 0), 0),
+        orders: daySales.length
+      };
+    });
+
+    return {
+      labels: dailyRevenue.map(day => day.date),
+      revenue: dailyRevenue.map(day => day.revenue),
+      orders: dailyRevenue.map(day => day.orders)
+    };
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-screen">
@@ -200,6 +248,56 @@ export default function Analytics() {
       </div>
     );
   }
+
+  const revenueChartData = {
+    labels: salesData?.labels || [],
+    datasets: [
+      {
+        label: 'Daily Revenue',
+        data: salesData?.revenue || [],
+        borderColor: chartColors.primary,
+        backgroundColor: chartColors.primaryLight,
+        fill: true
+      }
+    ]
+  };
+
+  const ordersChartData = {
+    labels: salesData?.labels || [],
+    datasets: [
+      {
+        label: 'Daily Orders',
+        data: salesData?.orders || [],
+        borderColor: chartColors.success,
+        backgroundColor: chartColors.successLight,
+        fill: true
+      }
+    ]
+  };
+
+  const chartOptions = {
+    ...defaultOptions,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          callback: (value) => `$${value}`
+        }
+      }
+    }
+  };
+
+  const orderChartOptions = {
+    ...defaultOptions,
+    scales: {
+      y: {
+        beginAtZero: true,
+        ticks: {
+          stepSize: 1
+        }
+      }
+    }
+  };
 
   return (
     <motion.div
@@ -426,6 +524,22 @@ export default function Analytics() {
               </AnimatePresence>
             </tbody>
           </table>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-4">Revenue Trend</h2>
+          <div className="h-64">
+            <ChartLine data={revenueChartData} options={chartOptions} />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow">
+          <h2 className="text-lg font-semibold mb-4">Order Trend</h2>
+          <div className="h-64">
+            <ChartLine data={ordersChartData} options={orderChartOptions} />
+          </div>
         </div>
       </div>
     </motion.div>
