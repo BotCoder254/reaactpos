@@ -11,7 +11,8 @@ import {
   FiUser,
   FiUserPlus,
   FiX,
-  FiTag
+  FiTag,
+  FiTrendingUp
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { getProducts } from '../utils/inventoryQueries';
@@ -21,6 +22,7 @@ import { getActiveDiscounts, calculateDiscount } from '../utils/discountQueries'
 import CustomerModal from '../components/customers/CustomerModal';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../firebase';
+import { getEmployeeStats } from '../utils/employeeQueries';
 
 export default function POS() {
   const [products, setProducts] = useState([]);
@@ -38,6 +40,7 @@ export default function POS() {
   const [selectedDiscount, setSelectedDiscount] = useState(null);
   const [discountAmount, setDiscountAmount] = useState(0);
   const { currentUser } = useAuth();
+  const [cashierStats, setCashierStats] = useState(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -90,6 +93,21 @@ export default function POS() {
       )
     );
   }, [searchTerm, products]);
+
+  useEffect(() => {
+    const fetchCashierStats = async () => {
+      if (currentUser) {
+        try {
+          const stats = await getEmployeeStats(currentUser.uid);
+          setCashierStats(stats);
+        } catch (error) {
+          console.error('Error fetching cashier stats:', error);
+        }
+      }
+    };
+
+    fetchCashierStats();
+  }, [currentUser]);
 
   const handleCustomerSearch = async (term) => {
     setCustomerSearchTerm(term);
@@ -233,16 +251,33 @@ export default function POS() {
     <div className="flex h-screen bg-gray-100">
       {/* Products Section */}
       <div className="flex-1 p-6 overflow-auto">
+        {/* Add cashier performance indicator */}
+        {cashierStats && (
+          <div className="mb-4 p-2 bg-white rounded-lg shadow-sm flex items-center justify-between">
+            <div className="flex items-center">
+              <FiTrendingUp className={`h-5 w-5 ${
+                cashierStats.dailyAverage > 1000 ? 'text-green-500' : 'text-gray-400'
+              }`} />
+              <span className="ml-2 text-sm font-medium text-gray-600">
+                Today's Sales: ${cashierStats.dailyAverage.toFixed(2)}
+              </span>
+            </div>
+            <span className="text-xs text-gray-500">
+              {cashierStats.totalTransactions} transactions
+            </span>
+          </div>
+        )}
+        
         <div className="mb-6">
           <div className="relative">
+            <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             <input
               type="text"
-              placeholder="Search products..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-4 py-2 pl-10 border border-gray-300 rounded-lg focus:ring-primary-500 focus:border-primary-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              placeholder="Search products..."
             />
-            <FiSearch className="absolute left-3 top-3 text-gray-400" />
           </div>
         </div>
 

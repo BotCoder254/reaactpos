@@ -18,6 +18,7 @@ import Customers from './pages/Customers';
 import Analytics from './pages/Analytics';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import EmployeeStats from './pages/EmployeeStats';
 
 function AppContent() {
   const location = useLocation();
@@ -45,6 +46,7 @@ function AppContent() {
               <Route path="/discounts" element={<PrivateRoute><Discounts /></PrivateRoute>} />
               <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
               <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+              <Route path="/employee-stats" element={<PrivateRoute><EmployeeStats /></PrivateRoute>} />
               <Route path="/checkout" element={<Checkout />} />
             </Routes>
           </div>
