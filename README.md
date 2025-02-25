@@ -6,6 +6,7 @@ A modern, feature-rich Point of Sale (POS) system built with React, Firebase, an
 ![React](https://img.shields.io/badge/React-18.x-blue)
 ![Firebase](https://img.shields.io/badge/Firebase-10.x-orange)
 ![Tailwind](https://img.shields.io/badge/Tailwind-3.x-38B2AC)
+![CI/CD](https://github.com/yourusername/reaactpos/actions/workflows/firebase-deploy.yml/badge.svg)
 
 ## ✨ Features
 
@@ -97,6 +98,43 @@ services:
 
 ## 🌐 Deployment
 
+### 🔄 Continuous Integration/Deployment
+
+This project uses GitHub Actions for automated testing, building, and deployment. Three workflows are configured:
+
+1. **Test and Lint** (`test.yml`)
+   - Runs on all branches and pull requests
+   - Executes unit tests
+   - Performs code linting
+   - Uploads test coverage reports
+   - Verifies build process
+
+2. **Firebase Deployment** (`firebase-deploy.yml`)
+   - Triggers on main branch updates
+   - Builds and deploys to Firebase Hosting
+   - Requires Firebase secrets configuration
+
+3. **Docker Deployment** (`docker-deploy.yml`)
+   - Builds and pushes Docker image
+   - Deploys to Render
+   - Requires Docker Hub and Render credentials
+
+#### Required Secrets
+
+Configure these secrets in your GitHub repository settings:
+
+```bash
+# Firebase Deployment
+FIREBASE_SERVICE_ACCOUNT - Firebase service account JSON
+FIREBASE_PROJECT_ID - Your Firebase project ID
+
+# Docker Deployment
+DOCKER_USERNAME - Docker Hub username
+DOCKER_PASSWORD - Docker Hub password
+RENDER_API_KEY - Render API key
+RENDER_SERVICE_ID - Render service ID
+```
+
 ### Vercel Deployment
 
 1. Install Vercel CLI:
@@ -179,6 +217,10 @@ server {
    - Choose "Docker" as the environment
    - Set the build command: `docker build -t app .`
    - Set the start command: `docker run -p 80:80 app`
+
+### Manual Deployment
+
+[Previous deployment instructions remain the same...]
 
 ## 📝 Available Scripts
 
