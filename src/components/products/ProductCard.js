@@ -3,10 +3,12 @@ import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
 import { formatCurrency } from '../../utils/cartUtils';
+import { FiImage } from 'react-icons/fi';
 
 function ProductCard({ product, onUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedProduct, setEditedProduct] = useState(product);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const { currentUser } = useAuth();
 
   const handleDelete = async () => {
@@ -37,15 +39,45 @@ function ProductCard({ product, onUpdate }) {
     setIsEditing(!isEditing);
   };
 
+  const nextImage = () => {
+    if (product.images && product.images.length > 1) {
+      setCurrentImageIndex((prev) =>
+        prev === product.images.length - 1 ? 0 : prev + 1
+      );
+    }
+  };
+
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
-      {product.imageUrl && (
-        <img
-          src={product.imageUrl}
-          alt={product.name}
-          className="w-full h-48 object-cover"
-        />
-      )}
+      <div className="relative">
+        {product.images && product.images.length > 0 ? (
+          <>
+            <img
+              src={product.images[currentImageIndex]}
+              alt={product.name}
+              className="w-full h-48 object-cover cursor-pointer"
+              onClick={nextImage}
+            />
+            {product.images.length > 1 && (
+              <button
+                onClick={nextImage}
+                className="absolute bottom-2 right-2 p-1 bg-black bg-opacity-50 rounded-full text-white"
+              >
+                <FiImage className="w-4 h-4" />
+              </button>
+            )}
+          </>
+        ) : (
+          <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
+            <FiImage className="w-8 h-8 text-gray-400" />
+          </div>
+        )}
+        {product.stock <= 10 && (
+          <div className="absolute top-2 right-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
+            Low Stock
+          </div>
+        )}
+      </div>
       <div className="p-4">
         {isEditing ? (
           <div className="space-y-3">

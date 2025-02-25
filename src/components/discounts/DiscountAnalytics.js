@@ -16,9 +16,13 @@ export default function DiscountAnalytics({ discountId }) {
   useEffect(() => {
     const fetchAnalytics = async () => {
       try {
+        setAnalytics(prev => ({ ...prev, loading: true, error: null }));
         const data = await getDiscountAnalytics(discountId);
         setAnalytics({
-          ...data,
+          totalSavings: Number(data.totalSavings || 0),
+          usageCount: Number(data.usageCount || 0),
+          averageOrderValue: Number(data.averageOrderValue || 0),
+          conversionRate: Number(data.conversionRate || 0),
           loading: false,
           error: null
         });
@@ -32,7 +36,9 @@ export default function DiscountAnalytics({ discountId }) {
       }
     };
 
-    fetchAnalytics();
+    if (discountId) {
+      fetchAnalytics();
+    }
   }, [discountId]);
 
   const stats = [

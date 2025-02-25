@@ -189,17 +189,20 @@ export const getDiscountAnalytics = async (discountId) => {
 export const getDiscountUsageHistory = async (discountId) => {
   try {
     const ordersRef = collection(db, 'orders');
+    const now = Timestamp.now();
+    const thirtyDaysAgo = new Timestamp(now.seconds - (30 * 24 * 60 * 60), 0);
+    
     const q = query(
       ordersRef,
       where('discountId', '==', discountId),
-      where('createdAt', '>=', new Date(Date.now() - 30 * 24 * 60 * 60 * 1000))
+      where('createdAt', '>=', thirtyDaysAgo)
     );
     
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-      createdAt: doc.data().createdAt.toDate()
+      createdAt: doc.data().createdAt?.toDate() || new Date()
     }));
   } catch (error) {
     console.error('Error getting discount usage history:', error);
@@ -218,22 +221,25 @@ export const getDiscountPerformanceMetrics = async (discountId) => {
       const date = order.createdAt.toISOString().split('T')[0];
       if (!dailyMetrics[date]) {
         dailyMetrics[date] = {
+          date,
           savings: 0,
           orders: 0,
           revenue: 0
         };
       }
-      dailyMetrics[date].savings += order.discount;
+      dailyMetrics[date].savings += order.discount || 0;
       dailyMetrics[date].orders += 1;
-      dailyMetrics[date].revenue += order.total;
+      dailyMetrics[date].revenue += order.total || 0;
     });
+
+    // Convert to array and sort by date
+    const sortedMetrics = Object.values(dailyMetrics).sort((a, b) => 
+      new Date(a.date) - new Date(b.date)
+    );
 
     return {
       overview: analytics,
-      dailyMetrics: Object.entries(dailyMetrics).map(([date, metrics]) => ({
-        date,
-        ...metrics
-      }))
+      dailyMetrics: sortedMetrics
     };
   } catch (error) {
     console.error('Error getting discount performance metrics:', error);

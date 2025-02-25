@@ -12,17 +12,25 @@ export default function DiscountPerformanceChart({ discountId }) {
   useEffect(() => {
     const fetchMetrics = async () => {
       try {
+        setLoading(true);
+        setError(null);
         const data = await getDiscountPerformanceMetrics(discountId);
-        setMetrics(data);
-        setLoading(false);
+        if (data && data.dailyMetrics) {
+          setMetrics(data);
+        } else {
+          throw new Error('Invalid metrics data format');
+        }
       } catch (error) {
         console.error('Error fetching performance metrics:', error);
         setError('Failed to load performance metrics');
+      } finally {
         setLoading(false);
       }
     };
 
-    fetchMetrics();
+    if (discountId) {
+      fetchMetrics();
+    }
   }, [discountId]);
 
   if (loading) {
@@ -58,7 +66,7 @@ export default function DiscountPerformanceChart({ discountId }) {
     );
   }
 
-  if (!metrics || !metrics.dailyMetrics || metrics.dailyMetrics.length === 0) {
+  if (!metrics?.dailyMetrics || metrics.dailyMetrics.length === 0) {
     return (
       <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4">
         <div className="flex">
@@ -90,21 +98,21 @@ export default function DiscountPerformanceChart({ discountId }) {
     datasets: [
       {
         label: 'Revenue',
-        data: metrics.dailyMetrics.map(metric => metric.revenue),
+        data: metrics.dailyMetrics.map(metric => Number(metric.revenue || 0).toFixed(2)),
         borderColor: chartColors.primary,
         backgroundColor: chartColors.primaryLight,
         yAxisID: 'y'
       },
       {
         label: 'Savings',
-        data: metrics.dailyMetrics.map(metric => metric.savings),
+        data: metrics.dailyMetrics.map(metric => Number(metric.savings || 0).toFixed(2)),
         borderColor: chartColors.success,
         backgroundColor: chartColors.successLight,
         yAxisID: 'y'
       },
       {
         label: 'Orders',
-        data: metrics.dailyMetrics.map(metric => metric.orders),
+        data: metrics.dailyMetrics.map(metric => metric.orders || 0),
         borderColor: chartColors.warning,
         backgroundColor: chartColors.warningLight,
         yAxisID: 'y1'
@@ -123,6 +131,18 @@ export default function DiscountPerformanceChart({ discountId }) {
       title: {
         display: true,
         text: '30-Day Performance Metrics'
+      },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const label = context.dataset.label || '';
+            const value = context.parsed.y;
+            if (label === 'Orders') {
+              return `${label}: ${value}`;
+            }
+            return `${label}: $${value}`;
+          }
+        }
       }
     },
     scales: {
@@ -133,6 +153,11 @@ export default function DiscountPerformanceChart({ discountId }) {
         title: {
           display: true,
           text: 'Amount ($)'
+        },
+        ticks: {
+          callback: function(value) {
+            return '$' + value;
+          }
         }
       },
       y1: {
