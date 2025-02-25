@@ -9,6 +9,7 @@ import Checkout from './pages/Checkout';
 import Discounts from './pages/Discounts';
 import DiscountBanner from './components/discounts/DiscountBanner';
 import { AuthProvider } from './contexts/AuthContext';
+import { SalesGoalsProvider } from './contexts/SalesGoalsContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -20,6 +21,7 @@ import Reports from './pages/Reports';
 import Settings from './pages/Settings';
 import EmployeeStats from './pages/EmployeeStats';
 import StaffStats from './pages/StaffStats';
+import SalesGoals from './pages/SalesGoals';
 
 function AppContent() {
   const location = useLocation();
@@ -41,6 +43,7 @@ function AppContent() {
               <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
               <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
               <Route path="/sales" element={<PrivateRoute><Sales /></PrivateRoute>} />
+              <Route path="/sales-goals" element={<PrivateRoute><SalesGoals /></PrivateRoute>} />
               <Route path="/customers" element={<PrivateRoute><Customers /></PrivateRoute>} />
               <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
               <Route path="/staff" element={<PrivateRoute><Staff /></PrivateRoute>} />
@@ -62,7 +65,9 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <AppContent />
+        <SalesGoalsProvider>
+          <AppContent />
+        </SalesGoalsProvider>
       </AuthProvider>
     </Router>
   );

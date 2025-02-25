@@ -14,6 +14,7 @@ import {
   ShoppingBagIcon,
   TagIcon,
   ChartPieIcon,
+  FlagIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -31,6 +32,7 @@ export default function Sidebar() {
     { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
     { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
+    { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
     { name: 'Staff', icon: UsersIcon, path: '/staff' },
@@ -47,6 +49,7 @@ export default function Sidebar() {
     { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
     { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
+    { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Settings', icon: CogIcon, path: '/settings' }

@@ -7,6 +7,7 @@ import Stats from '../components/dashboard/Stats';
 import SalesChart from '../components/dashboard/SalesChart';
 import RecentTransactions from '../components/dashboard/RecentTransactions';
 import LowStockAlert from '../components/dashboard/LowStockAlert';
+import SalesGoals from '../components/dashboard/SalesGoals';
 
 export default function Dashboard() {
   const { currentUser, userRole, logout } = useAuth();
@@ -107,6 +108,14 @@ export default function Dashboard() {
         {/* Manager-specific content */}
         {userRole === 'manager' && (
           <>
+            {/* Sales Goals */}
+            <motion.div
+              variants={itemVariants}
+              className="mb-6"
+            >
+              <SalesGoals />
+            </motion.div>
+
             {/* Sales Chart */}
             <div className="mb-6">
               <SalesChart />
