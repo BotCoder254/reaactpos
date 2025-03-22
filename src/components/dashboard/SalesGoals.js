@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { useSalesGoals } from '../../contexts/SalesGoalsContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -20,7 +20,7 @@ const SalesGoals = () => {
     if (!tempTarget || isNaN(parseFloat(tempTarget)) || parseFloat(tempTarget) < 0) {
       return;
     }
-    await updateGoal(period, tempTarget);
+    await updateGoal(period, parseFloat(tempTarget));
     setEditMode(null);
   };
 
@@ -106,7 +106,7 @@ const SalesGoals = () => {
         </div>
         <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
           <motion.div
-            className="h-full bg-blue-500"
+            className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-blue-500'}`}
             variants={progressVariants}
             initial="initial"
             animate="animate"

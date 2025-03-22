@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../firebase';
-import { collection, doc, setDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, onSnapshot, query, where, Timestamp } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
 const SalesGoalsContext = createContext();
@@ -25,36 +25,97 @@ export function SalesGoalsProvider({ children }) {
       return;
     }
 
-    // Reference to the organization's goals document
-    const goalsRef = doc(db, 'salesGoals', 'organization');
-    
-    // Set up real-time listener
-    const unsubscribe = onSnapshot(goalsRef, 
-      (doc) => {
-        if (doc.exists()) {
-          setGoals(doc.data());
-        } else {
-          // Initialize with default goals if document doesn't exist
-          const defaultGoals = {
-            daily: { target: 0, achieved: 0 },
-            weekly: { target: 0, achieved: 0 },
-            monthly: { target: 0, achieved: 0 }
-          };
-          setDoc(goalsRef, defaultGoals);
-          setGoals(defaultGoals);
-        }
-        setLoading(false);
-        setError(null);
-      },
-      (err) => {
-        console.error('Error fetching goals:', err);
-        setError('Failed to load sales goals');
+    let unsubscribeGoals;
+    let unsubscribeSales;
+
+    const fetchData = async () => {
+      try {
+        // Reference to the organization's goals document
+        const goalsRef = doc(db, 'salesGoals', 'organization');
+        
+        // Set up real-time listener for goals
+        unsubscribeGoals = onSnapshot(goalsRef, 
+          async (doc) => {
+            let goalsData;
+            if (doc.exists()) {
+              goalsData = doc.data();
+            } else {
+              // Initialize with default goals if document doesn't exist
+              goalsData = {
+                daily: { target: 0, achieved: 0 },
+                weekly: { target: 0, achieved: 0 },
+                monthly: { target: 0, achieved: 0 }
+              };
+              await setDoc(goalsRef, goalsData);
+            }
+
+            // Set up real-time listener for sales
+            const salesRef = collection(db, 'sales');
+            const now = new Date();
+            const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const startOfWeek = new Date(now.setDate(now.getDate() - now.getDay()));
+            const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+            unsubscribeSales = onSnapshot(
+              query(
+                salesRef,
+                where('timestamp', '>=', Timestamp.fromDate(startOfMonth))
+              ),
+              (snapshot) => {
+                const sales = snapshot.docs.map(doc => ({
+                  ...doc.data(),
+                  timestamp: doc.data().timestamp?.toDate()
+                }));
+
+                // Calculate achievements
+                const dailySales = sales.filter(sale => 
+                  sale.timestamp >= startOfDay
+                ).reduce((sum, sale) => sum + sale.total, 0);
+
+                const weeklySales = sales.filter(sale => 
+                  sale.timestamp >= startOfWeek
+                ).reduce((sum, sale) => sum + sale.total, 0);
+
+                const monthlySales = sales.reduce((sum, sale) => sum + sale.total, 0);
+
+                // Update goals with achievements
+                const updatedGoals = {
+                  daily: { ...goalsData.daily, achieved: dailySales },
+                  weekly: { ...goalsData.weekly, achieved: weeklySales },
+                  monthly: { ...goalsData.monthly, achieved: monthlySales }
+                };
+
+                setGoals(updatedGoals);
+                setLoading(false);
+                setError(null);
+              },
+              (err) => {
+                console.error('Error fetching sales:', err);
+                setError('Failed to load sales data');
+                setLoading(false);
+              }
+            );
+          },
+          (err) => {
+            console.error('Error fetching goals:', err);
+            setError('Failed to load sales goals');
+            setLoading(false);
+          }
+        );
+      } catch (err) {
+        console.error('Error in fetchData:', err);
+        setError('Failed to initialize sales tracking');
         setLoading(false);
       }
-    );
+    };
 
-    // Cleanup subscription
-    return () => unsubscribe();
+    fetchData();
+
+    // Cleanup subscriptions
+    return () => {
+      if (unsubscribeGoals) unsubscribeGoals();
+      if (unsubscribeSales) unsubscribeSales();
+    };
   }, [currentUser]);
 
   const updateGoal = async (period, target) => {
@@ -68,7 +129,6 @@ export function SalesGoalsProvider({ children }) {
       };
 
       await setDoc(goalsRef, updatedGoals);
-      // No need to setGoals here as the onSnapshot listener will update it
       setError(null);
     } catch (err) {
       console.error('Error updating goal:', err);
@@ -76,29 +136,9 @@ export function SalesGoalsProvider({ children }) {
     }
   };
 
-  const updateAchievement = async (period, achieved) => {
-    if (!currentUser) return;
-
-    try {
-      const goalsRef = doc(db, 'salesGoals', 'organization');
-      const updatedGoals = {
-        ...goals,
-        [period]: { ...goals[period], achieved: parseFloat(achieved) }
-      };
-
-      await setDoc(goalsRef, updatedGoals);
-      // No need to setGoals here as the onSnapshot listener will update it
-      setError(null);
-    } catch (err) {
-      console.error('Error updating achievement:', err);
-      setError('Failed to update achievement');
-    }
-  };
-
   const value = {
     goals,
     updateGoal,
-    updateAchievement,
     loading,
     error
   };
