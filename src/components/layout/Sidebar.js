@@ -53,6 +53,7 @@ export default function Sidebar() {
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
+    { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Settings', icon: CogIcon, path: '/settings' }
   ];

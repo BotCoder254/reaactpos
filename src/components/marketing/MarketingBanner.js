@@ -1,10 +1,14 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function MarketingBanner({ banners, currentIndex }) {
+  if (!banners || banners.length === 0) {
+    return null;
+  }
+
   return (
     <div className="relative w-full h-64 overflow-hidden rounded-lg shadow-lg">
-      <AnimatePresence mode="wait">
+      <AnimatePresence initial={false} mode="wait">
         {banners.map((banner, index) => (
           index === currentIndex && (
             <motion.div
@@ -13,7 +17,7 @@ export default function MarketingBanner({ banners, currentIndex }) {
               initial={{ opacity: 0, x: 100 }}
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -100 }}
-              transition={{ duration: 0.5 }}
+              transition={{ duration: 0.5, ease: "easeInOut" }}
             >
               <img
                 src={banner.imageUrl}
@@ -44,6 +48,18 @@ export default function MarketingBanner({ banners, currentIndex }) {
           )
         ))}
       </AnimatePresence>
+      
+      {/* Slide indicators */}
+      <div className="absolute bottom-4 right-4 flex space-x-2">
+        {banners.map((_, index) => (
+          <div
+            key={index}
+            className={`w-2 h-2 rounded-full transition-all duration-300 ${
+              index === currentIndex ? 'bg-white scale-125' : 'bg-white/50'
+            }`}
+          />
+        ))}
+      </div>
     </div>
   );
 } 
