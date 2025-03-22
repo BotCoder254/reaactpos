@@ -20,9 +20,10 @@ import { createSale, emailReceipt } from '../utils/salesQueries';
 import { searchCustomers, quickSearchCustomers, updateCustomerAfterPurchase } from '../utils/customerQueries';
 import { getActiveDiscounts, calculateDiscount } from '../utils/discountQueries';
 import CustomerModal from '../components/customers/CustomerModal';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getEmployeeStats } from '../utils/employeeQueries';
+import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../utils/dynamicPricingQueries';
 
 export default function POS() {
   const [products, setProducts] = useState([]);
@@ -30,6 +31,7 @@ export default function POS() {
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [processing, setProcessing] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState(null);
   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
@@ -41,26 +43,46 @@ export default function POS() {
   const [discountAmount, setDiscountAmount] = useState(0);
   const { currentUser } = useAuth();
   const [cashierStats, setCashierStats] = useState(null);
+  const [dynamicPricingRules, setDynamicPricingRules] = useState([]);
+  const [originalPrices, setOriginalPrices] = useState({});
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const productsCollection = collection(db, 'products');
-        const productsSnapshot = await getDocs(productsCollection);
-        const productsList = productsSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
-        setProducts(productsList);
+        const productsRef = collection(db, 'products');
+        const q = query(productsRef, where('active', '==', true));
+        const querySnapshot = await getDocs(q);
+        
+        const fetchedProducts = {};
+        const originalPrices = {};
+        
+        querySnapshot.docs.forEach(doc => {
+          const product = { id: doc.id, ...doc.data() };
+          fetchedProducts[doc.id] = product;
+          originalPrices[doc.id] = product.price;
+        });
+
+        // Apply dynamic pricing rules
+        Object.keys(fetchedProducts).forEach(productId => {
+          const product = fetchedProducts[productId];
+          const dynamicPrice = calculateDynamicPrice(product.price, dynamicPricingRules);
+          product.price = dynamicPrice;
+          product.originalPrice = originalPrices[productId];
+        });
+
+        setProducts(fetchedProducts);
+        setOriginalPrices(originalPrices);
+        setFilteredProducts(Object.values(fetchedProducts));
+        setLoading(false);
       } catch (error) {
         console.error('Error fetching products:', error);
-      } finally {
+        setError('Failed to load products');
         setLoading(false);
       }
     };
 
     fetchProducts();
-  }, []);
+  }, [dynamicPricingRules]);
 
   useEffect(() => {
     const fetchDiscounts = async () => {
@@ -86,7 +108,7 @@ export default function POS() {
 
   useEffect(() => {
     setFilteredProducts(
-      products.filter(
+      Object.values(products).filter(
         (product) =>
           product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           product.category.toLowerCase().includes(searchTerm.toLowerCase())
@@ -109,6 +131,19 @@ export default function POS() {
     fetchCashierStats();
   }, [currentUser]);
 
+  useEffect(() => {
+    const fetchDynamicPricingRules = async () => {
+      try {
+        const rules = await getActiveDynamicPricingRules();
+        setDynamicPricingRules(rules);
+      } catch (error) {
+        console.error('Error fetching dynamic pricing rules:', error);
+      }
+    };
+
+    fetchDynamicPricingRules();
+  }, []);
+
   const handleCustomerSearch = async (term) => {
     setCustomerSearchTerm(term);
     if (term.trim()) {
@@ -127,16 +162,18 @@ export default function POS() {
   };
 
   const addToCart = (product) => {
-    setCart((prevCart) => {
-      const existingItem = prevCart.find((item) => item.id === product.id);
+    const dynamicPrice = calculateDynamicPrice(product.originalPrice || product.price, dynamicPricingRules);
+    
+    setCart(prevCart => {
+      const existingItem = prevCart.find(item => item.id === product.id);
       if (existingItem) {
-        return prevCart.map((item) =>
+        return prevCart.map(item =>
           item.id === product.id
             ? { ...item, quantity: item.quantity + 1 }
             : item
         );
       }
-      return [...prevCart, { ...product, quantity: 1 }];
+      return [...prevCart, { ...product, quantity: 1, price: dynamicPrice }];
     });
   };
 
@@ -242,6 +279,61 @@ export default function POS() {
     }
   };
 
+  const renderProduct = (product) => (
+    <motion.div
+      key={product.id}
+      className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer"
+      onClick={() => addToCart(product)}
+      whileHover={{ scale: 1.02 }}
+      whileTap={{ scale: 0.98 }}
+    >
+      {product.image && (
+        <img
+          src={product.image}
+          alt={product.name}
+          className="w-full h-32 object-cover rounded-md mb-2"
+        />
+      )}
+      <h3 className="font-medium text-gray-900">{product.name}</h3>
+      <div className="mt-1">
+        {product.price !== originalPrices[product.id] ? (
+          <div className="space-y-1">
+            <span className="text-gray-500 line-through text-sm">
+              ${originalPrices[product.id]?.toFixed(2)}
+            </span>
+            <span className="text-primary-600 font-semibold block">
+              ${product.price.toFixed(2)}
+            </span>
+          </div>
+        ) : (
+          <span className="text-gray-900 font-semibold">
+            ${product.price.toFixed(2)}
+          </span>
+        )}
+      </div>
+      {product.price !== originalPrices[product.id] && (
+        <span className="inline-flex items-center px-2 py-1 mt-2 rounded-full text-xs font-medium bg-green-100 text-green-800">
+          Special Price
+        </span>
+      )}
+    </motion.div>
+  );
+
+  const handleProductSearch = (term) => {
+    setSearchTerm(term);
+    if (term.trim() === '') {
+      setFilteredProducts(Object.values(products));
+    } else {
+      setFilteredProducts(
+        Object.values(products).filter(
+          (product) =>
+            product.name.toLowerCase().includes(term.toLowerCase()) ||
+            product.category.toLowerCase().includes(term.toLowerCase())
+        )
+      );
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -277,34 +369,15 @@ export default function POS() {
             <input
               type="text"
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+              onChange={(e) => handleProductSearch(e.target.value)}
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="Search products..."
             />
           </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredProducts.map((product) => (
-            <div key={product.id} className="bg-white rounded-lg shadow p-4">
-              {product.imageUrl && (
-                <img
-                  src={product.imageUrl}
-                  alt={product.name}
-                  className="w-full h-48 object-cover rounded-lg mb-4"
-                />
-              )}
-              <h3 className="text-lg font-semibold">{product.name}</h3>
-              <p className="text-gray-600">${product.price}</p>
-              <p className="text-sm text-gray-500">Stock: {product.stock}</p>
-              <button
-                onClick={() => addToCart(product)}
-                className="mt-2 w-full bg-blue-500 text-white py-2 px-4 rounded hover:bg-blue-600"
-              >
-                Add to Cart
-              </button>
-            </div>
-          ))}
+          {filteredProducts.map((product) => renderProduct(product))}
         </div>
       </div>
 
