@@ -83,7 +83,7 @@ export default function EmployeeStats() {
         }
       } finally {
         if (isMounted) {
-          setLoading(false);
+        setLoading(false);
         }
       }
     };
@@ -190,7 +190,7 @@ export default function EmployeeStats() {
               <FiBarChart2 className="h-6 w-6 text-primary-600" />,
               7.8
             )}
-          </div>
+        </div>
 
           {/* Performance Charts */}
           {!Array.isArray(performanceData) && (
