@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, getDocs, query, where, Timestamp, orderBy } from 'firebase/firestore';
 import { logActivity } from './activityLog';
 
 export const getDiscounts = async () => {
@@ -96,19 +96,22 @@ export const getActiveDiscounts = async () => {
     const discountsRef = collection(db, 'discounts');
     const now = Timestamp.now();
     
+    // Query only active discounts and filter the rest in memory
     const q = query(
       discountsRef,
-      where('active', '==', true),
-      where('validUntil', '>', now)
+      where('active', '==', true)
     );
     
     const querySnapshot = await getDocs(q);
     
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      validUntil: doc.data().validUntil
-    }));
+    // Filter valid discounts in memory
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        validUntil: doc.data().validUntil
+      }))
+      .filter(discount => discount.validUntil > now);
   } catch (error) {
     console.error('Error fetching active discounts:', error);
     throw error;
