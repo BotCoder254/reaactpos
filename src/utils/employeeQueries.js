@@ -1,6 +1,35 @@
 import { db } from '../firebase';
 import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/firestore';
 
+const processChartData = (sales) => {
+  // Process sales data for charts
+  const salesByDate = sales.reduce((acc, sale) => {
+    const date = sale.timestamp.toDate().toLocaleDateString();
+    if (!acc[date]) {
+      acc[date] = {
+        amount: 0,
+        count: 0
+      };
+    }
+    acc[date].amount += sale.total;
+    acc[date].count += 1;
+    return acc;
+  }, {});
+
+  // Convert to arrays for charts
+  const salesData = Object.entries(salesByDate).map(([date, data]) => ({
+    date,
+    amount: data.amount
+  }));
+
+  const transactionsData = Object.entries(salesByDate).map(([date, data]) => ({
+    date,
+    count: data.count
+  }));
+
+  return { salesData, transactionsData };
+};
+
 export const getEmployeePerformance = async (employeeId, startDate, endDate) => {
   try {
     const salesRef = collection(db, 'sales');
@@ -30,12 +59,17 @@ export const getEmployeePerformance = async (employeeId, startDate, endDate) => 
     const averageTransactionValue = totalTransactions > 0 ? totalSales / totalTransactions : 0;
     const itemsSold = sales.reduce((sum, sale) => sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0);
 
+    // Process chart data
+    const { salesData, transactionsData } = processChartData(sales);
+
     return {
       totalSales,
       totalTransactions,
       averageTransactionValue,
       itemsSold,
-      sales
+      sales,
+      salesData,
+      transactionsData
     };
   } catch (error) {
     console.error('Error fetching employee performance:', error);

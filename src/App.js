@@ -22,6 +22,8 @@ import Settings from './pages/Settings';
 import EmployeeStats from './pages/EmployeeStats';
 import StaffStats from './pages/StaffStats';
 import SalesGoals from './pages/SalesGoals';
+import EmployeePerformance from './components/employees/EmployeePerformance';
+import TeamPerformance from './components/employees/TeamPerformance';
 
 function AppContent() {
   const location = useLocation();
@@ -52,6 +54,8 @@ function AppContent() {
               <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
               <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
               <Route path="/employee-stats" element={<PrivateRoute><EmployeeStats /></PrivateRoute>} />
+              <Route path="/employee-performance" element={<PrivateRoute><EmployeePerformance /></PrivateRoute>} />
+              <Route path="/team-performance" element={<PrivateRoute><TeamPerformance /></PrivateRoute>} />
               <Route path="/checkout" element={<Checkout />} />
             </Routes>
           </div>
