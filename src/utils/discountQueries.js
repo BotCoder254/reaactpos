@@ -144,11 +144,11 @@ export const calculateDiscount = (subtotal, discount) => {
 
 export const getDiscountAnalytics = async (discountId) => {
   try {
-    const ordersRef = collection(db, 'orders');
+    const ordersRef = collection(db, 'sales');
     const now = Timestamp.now();
     const thirtyDaysAgo = new Timestamp(now.seconds - (30 * 24 * 60 * 60), 0);
     
-    // First get all orders with this discount
+    // Query all orders with this discount
     const discountQuery = query(
       ordersRef,
       where('discountId', '==', discountId)
@@ -160,7 +160,12 @@ export const getDiscountAnalytics = async (discountId) => {
         id: doc.id,
         ...doc.data()
       }))
-      .filter(order => order.createdAt >= thirtyDaysAgo); // Filter in memory
+      .filter(order => {
+        const timestamp = order.timestamp instanceof Timestamp 
+          ? order.timestamp.toDate() 
+          : new Date(order.timestamp);
+        return timestamp >= thirtyDaysAgo.toDate();
+      });
 
     // Calculate analytics
     const totalSavings = orders.reduce((sum, order) => sum + (order.discount || 0), 0);
@@ -168,21 +173,25 @@ export const getDiscountAnalytics = async (discountId) => {
     const averageOrderValue = usageCount > 0
       ? orders.reduce((sum, order) => sum + order.total, 0) / usageCount
       : 0;
+    const totalOrderValue = orders.reduce((sum, order) => sum + order.total, 0);
 
     // Get total orders in the same period for conversion rate
-    const allOrdersQuery = query(ordersRef);
+    const allOrdersQuery = query(
+      ordersRef,
+      where('timestamp', '>=', thirtyDaysAgo)
+    );
     const allOrdersSnapshot = await getDocs(allOrdersQuery);
-    const totalOrders = allOrdersSnapshot.docs
-      .filter(doc => doc.data().createdAt >= thirtyDaysAgo)
-      .length;
+    const totalOrders = allOrdersSnapshot.docs.length;
     
-    const conversionRate = totalOrders > 0 ? usageCount / totalOrders : 0;
+    const conversionRate = totalOrders > 0 ? (usageCount / totalOrders) * 100 : 0;
 
     return {
       totalSavings,
       usageCount,
       averageOrderValue,
-      conversionRate
+      totalOrderValue,
+      conversionRate,
+      recentOrders: orders.slice(0, 5) // Get 5 most recent orders
     };
   } catch (error) {
     console.error('Error getting discount analytics:', error);
@@ -192,24 +201,25 @@ export const getDiscountAnalytics = async (discountId) => {
 
 export const getDiscountUsageHistory = async (discountId) => {
   try {
-    const ordersRef = collection(db, 'orders');
-    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const ordersRef = collection(db, 'sales');
+    const thirtyDaysAgo = Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
     
-    // Query only by discountId
+    // Query orders with this discount
     const q = query(
       ordersRef,
-      where('discountId', '==', discountId)
+      where('discountId', '==', discountId),
+      where('timestamp', '>=', thirtyDaysAgo),
+      orderBy('timestamp', 'desc')
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt.toDate()
-      }))
-      .filter(order => order.createdAt >= thirtyDaysAgo) // Filter in memory
-      .sort((a, b) => b.createdAt - a.createdAt); // Sort in memory
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      timestamp: doc.data().timestamp instanceof Timestamp 
+        ? doc.data().timestamp.toDate() 
+        : new Date(doc.data().timestamp)
+    }));
   } catch (error) {
     console.error('Error getting discount usage history:', error);
     throw error;
@@ -221,10 +231,10 @@ export const getDiscountPerformanceMetrics = async (discountId) => {
     const analytics = await getDiscountAnalytics(discountId);
     const usageHistory = await getDiscountUsageHistory(discountId);
     
-    // Calculate daily metrics from the filtered usage history
+    // Calculate daily metrics
     const dailyMetrics = {};
     usageHistory.forEach(order => {
-      const date = order.createdAt.toISOString().split('T')[0];
+      const date = order.timestamp.toISOString().split('T')[0];
       if (!dailyMetrics[date]) {
         dailyMetrics[date] = {
           savings: 0,
@@ -237,7 +247,7 @@ export const getDiscountPerformanceMetrics = async (discountId) => {
       dailyMetrics[date].revenue += order.total || 0;
     });
 
-    // Sort dates and ensure we have entries for all days
+    // Ensure we have entries for all days
     const sortedDates = Object.keys(dailyMetrics).sort();
     if (sortedDates.length > 0) {
       const firstDate = new Date(sortedDates[0]);

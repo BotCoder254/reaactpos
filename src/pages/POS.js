@@ -184,6 +184,8 @@ export default function POS() {
         discount: discountAmount,
         discountId: selectedDiscount?.id,
         discountName: selectedDiscount?.name,
+        discountType: selectedDiscount?.type,
+        discountValue: selectedDiscount?.value,
         tax: calculateTax(),
         total: subtotal - discountAmount + calculateTax(),
         paymentMethod,
@@ -196,6 +198,7 @@ export default function POS() {
         })
       };
 
+      // Create the sale record
       const saleId = await createSale(saleData);
 
       // Update customer data if a customer was selected

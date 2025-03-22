@@ -70,7 +70,7 @@ export default function MarketingManager() {
     try {
       setError(null);
       const response = await fetch(
-        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(newBanner.imageQuery)}&per_page=9`,
+        `https://api.unsplash.com/search/photos?query=${encodeURIComponent(newBanner.imageQuery)}&per_page=20`,
         {
           headers: {
             'Authorization': `Client-ID oRz__lKi7bWKvEFhKhT2ighN2aJcWZ_BwPB-JIkelBk`
