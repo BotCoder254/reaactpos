@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FiPlus, FiCalendar, FiImage, FiSearch } from 'react-icons/fi';
+import { FiPlus, FiCalendar, FiImage, FiSearch, FiTrash2 } from 'react-icons/fi';
 import MarketingBanner from './MarketingBanner';
 import { db } from '../../config/firebase';
-import { collection, getDocs, query, Timestamp, addDoc } from 'firebase/firestore';
+import { collection, getDocs, query, Timestamp, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 
 export default function MarketingManager() {
@@ -124,6 +124,17 @@ export default function MarketingManager() {
     } catch (error) {
       console.error('Error creating banner:', error);
       setError('Failed to create banner');
+    }
+  };
+
+  const handleDeleteBanner = async (bannerId) => {
+    try {
+      const bannerRef = doc(db, 'marketingBanners', bannerId);
+      await deleteDoc(bannerRef);
+      await fetchBanners(); // Refresh banners list
+    } catch (error) {
+      console.error('Error deleting banner:', error);
+      setError('Failed to delete banner');
     }
   };
 
@@ -316,6 +327,14 @@ export default function MarketingManager() {
                   </p>
                 </div>
               </div>
+              {userRole === 'manager' && (
+                <button
+                  onClick={() => handleDeleteBanner(banner.id)}
+                  className="p-2 text-red-600 hover:text-red-800"
+                >
+                  <FiTrash2 className="w-5 h-5" />
+                </button>
+              )}
             </motion.li>
           ))}
         </ul>
