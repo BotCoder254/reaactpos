@@ -148,7 +148,7 @@ export const getDiscountAnalytics = async (discountId) => {
     const now = Timestamp.now();
     const thirtyDaysAgo = new Timestamp(now.seconds - (30 * 24 * 60 * 60), 0);
     
-    // Query all orders with this discount
+    // Simple query by discountId only, filter timestamp in memory
     const discountQuery = query(
       ordersRef,
       where('discountId', '==', discountId)
@@ -165,6 +165,11 @@ export const getDiscountAnalytics = async (discountId) => {
           ? order.timestamp.toDate() 
           : new Date(order.timestamp);
         return timestamp >= thirtyDaysAgo.toDate();
+      })
+      .sort((a, b) => {
+        const timestampA = a.timestamp instanceof Timestamp ? a.timestamp.toDate() : new Date(a.timestamp);
+        const timestampB = b.timestamp instanceof Timestamp ? b.timestamp.toDate() : new Date(b.timestamp);
+        return timestampB - timestampA;
       });
 
     // Calculate analytics
@@ -175,13 +180,16 @@ export const getDiscountAnalytics = async (discountId) => {
       : 0;
     const totalOrderValue = orders.reduce((sum, order) => sum + order.total, 0);
 
-    // Get total orders in the same period for conversion rate
-    const allOrdersQuery = query(
-      ordersRef,
-      where('timestamp', '>=', thirtyDaysAgo)
-    );
+    // Get total orders in the same period
+    const allOrdersQuery = query(ordersRef);
     const allOrdersSnapshot = await getDocs(allOrdersQuery);
-    const totalOrders = allOrdersSnapshot.docs.length;
+    const totalOrders = allOrdersSnapshot.docs
+      .filter(doc => {
+        const timestamp = doc.data().timestamp instanceof Timestamp 
+          ? doc.data().timestamp.toDate() 
+          : new Date(doc.data().timestamp);
+        return timestamp >= thirtyDaysAgo.toDate();
+      }).length;
     
     const conversionRate = totalOrders > 0 ? (usageCount / totalOrders) * 100 : 0;
 
@@ -202,24 +210,25 @@ export const getDiscountAnalytics = async (discountId) => {
 export const getDiscountUsageHistory = async (discountId) => {
   try {
     const ordersRef = collection(db, 'sales');
-    const thirtyDaysAgo = Timestamp.fromDate(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
     
-    // Query orders with this discount
+    // Simple query by discountId only, filter and sort in memory
     const q = query(
       ordersRef,
-      where('discountId', '==', discountId),
-      where('timestamp', '>=', thirtyDaysAgo),
-      orderBy('timestamp', 'desc')
+      where('discountId', '==', discountId)
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      timestamp: doc.data().timestamp instanceof Timestamp 
-        ? doc.data().timestamp.toDate() 
-        : new Date(doc.data().timestamp)
-    }));
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data(),
+        timestamp: doc.data().timestamp instanceof Timestamp 
+          ? doc.data().timestamp.toDate() 
+          : new Date(doc.data().timestamp)
+      }))
+      .filter(order => order.timestamp >= thirtyDaysAgo)
+      .sort((a, b) => b.timestamp - a.timestamp);
   } catch (error) {
     console.error('Error getting discount usage history:', error);
     throw error;
