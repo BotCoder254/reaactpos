@@ -18,7 +18,7 @@ export default function MarketingManager() {
   const handleUnsplashSearch = async () => {
     try {
       const response = await fetch(
-        `https://api.unsplash.com/search/photos?query=${newBanner.imageQuery}&client_id=YOUR_UNSPLASH_API_KEY`
+        `https://api.unsplash.com/search/photos?query=${newBanner.imageQuery}&client_id=${process.env.UNSPLASH_ACCESS_KEY}`
       );
       const data = await response.json();
       if (data.results.length > 0) {
