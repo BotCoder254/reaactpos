@@ -24,75 +24,76 @@ export default function EmployeeStats() {
   const [performanceData, setPerformanceData] = useState(null);
 
   useEffect(() => {
-    const fetchUserRole = async () => {
+    let isMounted = true;
+
+    const fetchData = async () => {
       if (!currentUser) {
         setLoading(false);
         return;
       }
 
       try {
+        // Fetch user role
         const userRef = collection(db, 'users');
         const q = query(userRef, where('uid', '==', currentUser.uid));
         const querySnapshot = await getDocs(q);
         
+        if (!isMounted) return;
+
+        let role = null;
         if (!querySnapshot.empty) {
-          const userData = querySnapshot.docs[0].data();
-          setUserRole(userData.role);
+          role = querySnapshot.docs[0].data().role;
+          setUserRole(role);
+        }
+
+        // Fetch performance data
+        if (role) {
+          const endDate = new Date();
+          const startDate = new Date();
+          
+          switch (dateRange) {
+            case 'today':
+              startDate.setHours(0, 0, 0, 0);
+              break;
+            case 'week':
+              startDate.setDate(startDate.getDate() - 7);
+              break;
+            case 'month':
+              startDate.setMonth(startDate.getMonth() - 1);
+              break;
+            case 'year':
+              startDate.setFullYear(startDate.getFullYear() - 1);
+              break;
+            default:
+              startDate.setMonth(startDate.getMonth() - 1);
+          }
+
+          const data = role === 'cashier'
+            ? await getEmployeeStats(currentUser.uid)
+            : await getTeamPerformance(startDate, endDate);
+
+          if (isMounted) {
+            setPerformanceData(data);
+          }
         }
       } catch (error) {
-        console.error('Error fetching user role:', error);
-        setError('Failed to fetch user role');
+        console.error('Error fetching data:', error);
+        if (isMounted) {
+          setError('Failed to fetch data');
+        }
       } finally {
-        // Don't set loading to false here, wait for performance data
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
-    fetchUserRole();
-  }, [currentUser]);
+    fetchData();
 
-  useEffect(() => {
-    const fetchPerformanceData = async () => {
-      if (!currentUser || !userRole) {
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true); // Set loading true when starting to fetch
-        const endDate = new Date();
-        const startDate = new Date();
-        
-        switch (dateRange) {
-          case 'today':
-            startDate.setHours(0, 0, 0, 0);
-            break;
-          case 'week':
-            startDate.setDate(startDate.getDate() - 7);
-            break;
-          case 'month':
-            startDate.setMonth(startDate.getMonth() - 1);
-            break;
-          case 'year':
-            startDate.setFullYear(startDate.getFullYear() - 1);
-            break;
-          default:
-            startDate.setMonth(startDate.getMonth() - 1);
-        }
-
-        const data = userRole === 'cashier'
-          ? await getEmployeeStats(currentUser.uid)
-          : await getTeamPerformance(startDate, endDate);
-        setPerformanceData(data);
-      } catch (error) {
-        console.error('Error fetching performance data:', error);
-        setError('Failed to fetch performance data');
-      } finally {
-        setLoading(false);
-      }
+    return () => {
+      isMounted = false;
     };
-
-    fetchPerformanceData();
-  }, [currentUser, userRole, dateRange]);
+  }, [currentUser, dateRange]);
 
   if (loading) {
     return (

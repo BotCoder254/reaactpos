@@ -15,6 +15,7 @@ import {
   TagIcon,
   ChartPieIcon,
   FlagIcon,
+  PhotoIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -39,6 +40,7 @@ export default function Sidebar() {
     { name: 'Staff Stats', icon: ChartPieIcon, path: '/staff-stats' },
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Discounts', icon: TagIcon, path: '/discounts' },
+    { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Reports', icon: DocumentTextIcon, path: '/reports' },
     { name: 'Settings', icon: CogIcon, path: '/settings' }
   ];
