@@ -4,19 +4,25 @@ import { collection, query, where, getDocs, Timestamp, orderBy } from 'firebase/
 export const getEmployeePerformance = async (employeeId, startDate, endDate) => {
   try {
     const salesRef = collection(db, 'sales');
+    // Only query by cashierId to avoid composite index
     const q = query(
       salesRef,
-      where('cashierId', '==', employeeId),
-      where('timestamp', '>=', startDate),
-      where('timestamp', '<=', endDate),
-      orderBy('timestamp', 'desc')
+      where('cashierId', '==', employeeId)
     );
 
     const querySnapshot = await getDocs(q);
-    const sales = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const sales = querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      // Filter by date range in memory
+      .filter(sale => {
+        const timestamp = sale.timestamp.toDate();
+        return timestamp >= startDate && timestamp <= endDate;
+      })
+      // Sort by timestamp in memory
+      .sort((a, b) => b.timestamp.toDate() - a.timestamp.toDate());
 
     // Calculate performance metrics
     const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
