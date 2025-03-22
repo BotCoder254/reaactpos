@@ -53,107 +53,118 @@ const Reports = () => {
   const [realtimeData, setRealtimeData] = useState([]);
 
   useEffect(() => {
-    fetchReportData();
-    // Set up real-time listener
-    const unsubscribe = setupRealtimeListener();
-    return () => unsubscribe();
+    let unsubscribe;
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        // Get initial report data
+        const report = await getSalesReport(dateRange, cashierId, productCategory);
+        setReportData(report);
+
+        // Get top products
+        const products = await getTopProducts(dateRange);
+        setTopProducts(products);
+
+        // Get cashier performance
+        const cashiers = await getCashierPerformance(dateRange);
+        setCashierStats(cashiers);
+
+        // Set up real-time listener
+        const now = new Date();
+        let startDate;
+
+        switch (dateRange) {
+          case 'today':
+            startDate = new Date(now.setHours(0, 0, 0, 0));
+            break;
+          case 'week':
+            startDate = new Date(now.setDate(now.getDate() - 7));
+            break;
+          case 'month':
+            startDate = new Date(now.setMonth(now.getMonth() - 1));
+            break;
+          case 'year':
+            startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+            break;
+          default:
+            startDate = new Date(now.setDate(now.getDate() - 30));
+        }
+
+        const constraints = [
+          where('timestamp', '>=', Timestamp.fromDate(startDate)),
+          orderBy('timestamp', 'desc')
+        ];
+
+        if (cashierId !== 'all') {
+          constraints.push(where('cashierId', '==', cashierId));
+        }
+
+        const q = query(collection(db, 'sales'), ...constraints);
+
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const sales = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+
+          // Filter by product category if needed
+          const filteredSales = productCategory === 'all'
+            ? sales
+            : sales.filter(sale =>
+                sale.items.some(item => item.category === productCategory)
+              );
+
+          setRealtimeData(filteredSales);
+
+          // Update summary data
+          const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+          const totalItems = filteredSales.reduce((sum, sale) => 
+            sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
+          );
+          const uniqueCustomers = new Set(filteredSales.map(sale => sale.customerId)).size;
+
+          // Update sales trend
+          const salesByDate = filteredSales.reduce((acc, sale) => {
+            const date = new Date(sale.timestamp.seconds * 1000).toLocaleDateString();
+            acc[date] = (acc[date] || 0) + sale.total;
+            return acc;
+          }, {});
+
+          const salesTrend = Object.entries(salesByDate)
+            .sort(([dateA], [dateB]) => new Date(dateA) - new Date(dateB))
+            .map(([date, total]) => ({
+              date,
+              total
+            }));
+
+          setReportData({
+            totalSales,
+            totalItems,
+            totalCustomers: uniqueCustomers,
+            salesTrend
+          });
+        }, (error) => {
+          console.error('Error in real-time listener:', error);
+          setError('Failed to get real-time updates');
+        });
+
+      } catch (err) {
+        setError('Failed to fetch report data. Please try again.');
+        console.error('Error fetching report data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [dateRange, cashierId, productCategory]);
-
-  const setupRealtimeListener = () => {
-    const now = new Date();
-    let startDate;
-
-    switch (dateRange) {
-      case 'today':
-        startDate = new Date(now.setHours(0, 0, 0, 0));
-        break;
-      case 'week':
-        startDate = new Date(now.setDate(now.getDate() - 7));
-        break;
-      case 'month':
-        startDate = new Date(now.setMonth(now.getMonth() - 1));
-        break;
-      case 'year':
-        startDate = new Date(now.setFullYear(now.getFullYear() - 1));
-        break;
-      default:
-        startDate = new Date(now.setDate(now.getDate() - 30));
-    }
-
-    const constraints = [
-      where('timestamp', '>=', Timestamp.fromDate(startDate)),
-      orderBy('timestamp', 'desc')
-    ];
-
-    if (cashierId !== 'all') {
-      constraints.push(where('cashierId', '==', cashierId));
-    }
-
-    if (productCategory !== 'all') {
-      constraints.push(where('items.category', '==', productCategory));
-    }
-
-    const q = query(collection(db, 'sales'), ...constraints);
-
-    return onSnapshot(q, (snapshot) => {
-      const sales = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-
-      // Process real-time data
-      const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
-      const totalItems = sales.reduce((sum, sale) => sum + sale.items.length, 0);
-      const uniqueCustomers = new Set(sales.map(sale => sale.customerId)).size;
-
-      // Update real-time data
-      setRealtimeData(sales);
-      setReportData(prev => ({
-        ...prev,
-        totalSales,
-        totalItems,
-        totalCustomers: uniqueCustomers
-      }));
-
-      // Update sales trend
-      const salesByDate = sales.reduce((acc, sale) => {
-        const date = new Date(sale.timestamp.seconds * 1000).toLocaleDateString();
-        acc[date] = (acc[date] || 0) + sale.total;
-        return acc;
-      }, {});
-
-      setReportData(prev => ({
-        ...prev,
-        salesTrend: Object.entries(salesByDate).map(([date, total]) => ({
-          date,
-          total
-        }))
-      }));
-    }, (error) => {
-      console.error('Error in real-time listener:', error);
-      setError('Failed to get real-time updates');
-    });
-  };
-
-  const fetchReportData = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const [products, cashiers] = await Promise.all([
-        getTopProducts(dateRange),
-        getCashierPerformance(dateRange)
-      ]);
-
-      setTopProducts(products);
-      setCashierStats(cashiers);
-    } catch (err) {
-      setError('Failed to fetch report data. Please try again.');
-      console.error('Error fetching report data:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleExport = async () => {
     try {

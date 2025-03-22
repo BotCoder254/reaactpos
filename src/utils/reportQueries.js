@@ -15,7 +15,7 @@ import Papa from 'papaparse';
 // Get sales report data
 export async function getSalesReport(dateRange, cashierId = 'all', productCategory = 'all') {
   try {
-    const constraints = [];
+    const salesRef = collection(db, 'sales');
     const now = new Date();
     let startDate;
 
@@ -36,21 +36,15 @@ export async function getSalesReport(dateRange, cashierId = 'all', productCatego
         startDate = new Date(now.setDate(now.getDate() - 30));
     }
 
-    constraints.push(where('timestamp', '>=', Timestamp.fromDate(startDate)));
-
-    if (cashierId !== 'all') {
-      constraints.push(where('cashierId', '==', cashierId));
-    }
-
-    if (productCategory !== 'all') {
-      constraints.push(where('items.category', '==', productCategory));
-    }
-
-    const q = query(
-      collection(db, 'sales'),
-      ...constraints,
+    let q = query(
+      salesRef,
+      where('timestamp', '>=', Timestamp.fromDate(startDate)),
       orderBy('timestamp', 'desc')
     );
+
+    if (cashierId !== 'all') {
+      q = query(q, where('cashierId', '==', cashierId));
+    }
 
     const querySnapshot = await getDocs(q);
     const sales = querySnapshot.docs.map(doc => ({
@@ -58,28 +52,40 @@ export async function getSalesReport(dateRange, cashierId = 'all', productCatego
       ...doc.data()
     }));
 
+    // Filter by product category in memory if needed
+    const filteredSales = productCategory === 'all' 
+      ? sales 
+      : sales.filter(sale => 
+          sale.items.some(item => item.category === productCategory)
+        );
+
     // Process sales data
-    const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalItems = sales.reduce((sum, sale) => sum + sale.items.length, 0);
-    const uniqueCustomers = new Set(sales.map(sale => sale.customerId)).size;
+    const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
+    const totalItems = filteredSales.reduce((sum, sale) => 
+      sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
+    );
+    const uniqueCustomers = new Set(filteredSales.map(sale => sale.customerId)).size;
 
     // Generate sales trend data
-    const salesByDate = sales.reduce((acc, sale) => {
+    const salesByDate = filteredSales.reduce((acc, sale) => {
       const date = new Date(sale.timestamp.seconds * 1000).toLocaleDateString();
       acc[date] = (acc[date] || 0) + sale.total;
       return acc;
     }, {});
 
-    const salesTrend = Object.entries(salesByDate).map(([date, total]) => ({
-      date,
-      total
-    }));
+    const salesTrend = Object.entries(salesByDate)
+      .sort(([dateA], [dateB]) => new Date(dateA) - new Date(dateB))
+      .map(([date, total]) => ({
+        date,
+        total
+      }));
 
     return {
       totalSales,
       totalItems,
       totalCustomers: uniqueCustomers,
-      salesTrend
+      salesTrend,
+      sales: filteredSales
     };
   } catch (error) {
     console.error('Error getting sales report:', error);
@@ -94,17 +100,17 @@ export async function getTopProducts(dateRange) {
     const productSales = {};
 
     // Process all sales to get product totals
-    salesReport.sales?.forEach(sale => {
+    salesReport.sales.forEach(sale => {
       sale.items.forEach(item => {
-        if (!productSales[item.id]) {
-          productSales[item.id] = {
+        if (!productSales[item.productId]) {
+          productSales[item.productId] = {
             name: item.name,
             quantity: 0,
             revenue: 0
           };
         }
-        productSales[item.id].quantity += item.quantity;
-        productSales[item.id].revenue += item.price * item.quantity;
+        productSales[item.productId].quantity += item.quantity;
+        productSales[item.productId].revenue += item.price * item.quantity;
       });
     });
 
@@ -128,26 +134,40 @@ export async function getCashierPerformance(dateRange) {
     const salesReport = await getSalesReport(dateRange);
     const cashierStats = {};
 
+    // First get all cashiers
+    const cashiersRef = collection(db, 'users');
+    const cashiersQuery = query(cashiersRef, where('role', '==', 'cashier'));
+    const cashiersSnapshot = await getDocs(cashiersQuery);
+    
+    // Initialize stats for all cashiers
+    cashiersSnapshot.docs.forEach(doc => {
+      cashierStats[doc.id] = {
+        id: doc.id,
+        name: doc.data().name || 'Unknown',
+        email: doc.data().email || '',
+        totalSales: 0,
+        transactionCount: 0,
+        averageTransaction: 0,
+        itemsSold: 0
+      };
+    });
+
     // Process all sales to get cashier statistics
-    salesReport.sales?.forEach(sale => {
-      if (!cashierStats[sale.cashierId]) {
-        cashierStats[sale.cashierId] = {
-          name: sale.cashierName,
-          totalSales: 0,
-          transactionCount: 0,
-          averageTransaction: 0
-        };
+    salesReport.sales.forEach(sale => {
+      if (cashierStats[sale.cashierId]) {
+        cashierStats[sale.cashierId].totalSales += sale.total;
+        cashierStats[sale.cashierId].transactionCount += 1;
+        cashierStats[sale.cashierId].itemsSold += sale.items.reduce((sum, item) => sum + item.quantity, 0);
       }
-      cashierStats[sale.cashierId].totalSales += sale.total;
-      cashierStats[sale.cashierId].transactionCount += 1;
     });
 
     // Calculate averages and convert to array
-    return Object.entries(cashierStats)
-      .map(([id, stats]) => ({
-        id,
+    return Object.values(cashierStats)
+      .map(stats => ({
         ...stats,
-        averageTransaction: stats.totalSales / stats.transactionCount
+        averageTransaction: stats.transactionCount > 0 
+          ? stats.totalSales / stats.transactionCount 
+          : 0
       }))
       .sort((a, b) => b.totalSales - a.totalSales);
   } catch (error) {
@@ -159,20 +179,28 @@ export async function getCashierPerformance(dateRange) {
 // Export sales report
 export async function exportSalesReport(reportData, dateRange) {
   try {
-    const csvData = [
+    // Format data for CSV
+    const salesData = reportData.salesTrend.map(data => ({
+      Date: data.date,
+      Sales: data.total.toFixed(2)
+    }));
+
+    const summaryData = [
       {
+        'Report Summary': '',
         'Date Range': dateRange,
-        'Total Sales': reportData.totalSales,
+        'Total Sales': reportData.totalSales.toFixed(2),
         'Total Items': reportData.totalItems,
         'Total Customers': reportData.totalCustomers
-      },
-      {},
-      { 'Sales Trend': '' },
-      { Date: 'Total' },
-      ...reportData.salesTrend.map(data => ({
-        Date: data.date,
-        Total: data.total
-      }))
+      }
+    ];
+
+    // Combine all data
+    const csvData = [
+      ...summaryData,
+      { '': '' }, // Empty row for spacing
+      { 'Daily Sales': '' },
+      ...salesData
     ];
 
     const csv = Papa.unparse(csvData);
