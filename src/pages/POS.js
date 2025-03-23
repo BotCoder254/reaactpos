@@ -24,6 +24,7 @@ import { collection, getDocs, query, where } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getEmployeeStats } from '../utils/employeeQueries';
 import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../utils/dynamicPricingQueries';
+import { getReceiptBranding, generateReceiptHTML } from '../utils/receiptQueries';
 
 export default function POS() {
   const [products, setProducts] = useState({});
@@ -49,6 +50,7 @@ export default function POS() {
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const ITEMS_PER_PAGE = 12;
+  const [receiptBranding, setReceiptBranding] = useState(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -153,6 +155,19 @@ export default function POS() {
     };
 
     fetchDynamicPricingRules();
+  }, []);
+
+  useEffect(() => {
+    const fetchReceiptBranding = async () => {
+      try {
+        const branding = await getReceiptBranding();
+        setReceiptBranding(branding);
+      } catch (error) {
+        console.error('Error fetching receipt branding:', error);
+      }
+    };
+
+    fetchReceiptBranding();
   }, []);
 
   const handleCustomerSearch = async (term) => {
@@ -318,19 +333,56 @@ export default function POS() {
 
   const handleEmailReceipt = async (email) => {
     try {
-      await emailReceipt({
+      const saleData = {
         items: cart,
         subtotal: calculateTotal(),
+        discount: discountAmount,
+        discountName: selectedDiscount?.name,
         tax: calculateTax(),
-        total: calculateTotal() + calculateTax(),
+        total: calculateTotal() - discountAmount + calculateTax(),
         email,
         customerName: selectedCustomer?.name,
+        cashierName: currentUser.email,
+        timestamp: new Date(),
+        id: Date.now().toString()
+      };
+
+      // Generate receipt HTML with branding
+      const receiptHTML = generateReceiptHTML(receiptBranding, saleData);
+      
+      await emailReceipt({
+        ...saleData,
+        receiptHTML
       });
+      
       alert('Receipt sent successfully!');
     } catch (error) {
       console.error('Error sending receipt:', error);
       alert('Failed to send receipt');
     }
+  };
+
+  const handlePrintReceipt = () => {
+    if (!receiptBranding || cart.length === 0) return;
+
+    const saleData = {
+      items: cart,
+      subtotal: calculateTotal(),
+      discount: discountAmount,
+      discountName: selectedDiscount?.name,
+      tax: calculateTax(),
+      total: calculateTotal() - discountAmount + calculateTax(),
+      customerName: selectedCustomer?.name,
+      cashierName: currentUser.email,
+      timestamp: new Date(),
+      id: Date.now().toString()
+    };
+
+    const receiptHTML = generateReceiptHTML(receiptBranding, saleData);
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(receiptHTML);
+    printWindow.document.close();
+    printWindow.print();
   };
 
   const renderProduct = (product) => (
@@ -691,7 +743,7 @@ export default function POS() {
 
           <div className="flex justify-center space-x-4 mt-4">
             <button
-              onClick={() => window.print()}
+              onClick={handlePrintReceipt}
               disabled={cart.length === 0}
               className="p-2 text-gray-600 hover:text-primary-600"
             >

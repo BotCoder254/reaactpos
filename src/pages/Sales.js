@@ -11,6 +11,7 @@ import {
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { exportSales, emailReceipt } from '../utils/salesQueries';
+import { getReceiptBranding, generateReceiptHTML } from '../utils/receiptQueries';
 
 export default function Sales() {
   const [sales, setSales] = useState([]);
@@ -18,11 +19,14 @@ export default function Sales() {
   const [dateRange, setDateRange] = useState('today');
   const [filterCashier, setFilterCashier] = useState('all');
   const [filterPayment, setFilterPayment] = useState('all');
+  const [receiptBranding, setReceiptBranding] = useState(null);
   const { userRole } = useAuth();
 
   useEffect(() => {
-    const fetchSales = async () => {
+    const fetchData = async () => {
       try {
+        setLoading(true);
+        // Fetch sales
         const salesCollection = collection(db, 'sales');
         const salesQuery = query(salesCollection, orderBy('timestamp', 'desc'));
         const salesSnapshot = await getDocs(salesQuery);
@@ -32,14 +36,18 @@ export default function Sales() {
           timestamp: doc.data().timestamp?.toDate().toLocaleString() || 'N/A'
         }));
         setSales(salesList);
+
+        // Fetch receipt branding
+        const branding = await getReceiptBranding();
+        setReceiptBranding(branding);
       } catch (error) {
-        console.error('Error fetching sales:', error);
+        console.error('Error fetching data:', error);
       } finally {
         setLoading(false);
       }
     };
 
-    fetchSales();
+    fetchData();
   }, []);
 
   const handleExport = async () => {
@@ -52,9 +60,39 @@ export default function Sales() {
     }
   };
 
+  const handlePrintReceipt = (sale) => {
+    if (!receiptBranding) return;
+
+    const receiptHTML = generateReceiptHTML(receiptBranding, {
+      ...sale,
+      items: sale.items || [],
+      customerName: sale.customerName || 'Walk-in Customer',
+      timestamp: new Date(sale.timestamp)
+    });
+
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(receiptHTML);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
   const handleEmailReceipt = async (sale, email) => {
     try {
-      await emailReceipt(sale, email);
+      if (!receiptBranding) throw new Error('Receipt branding not loaded');
+
+      const receiptHTML = generateReceiptHTML(receiptBranding, {
+        ...sale,
+        items: sale.items || [],
+        customerName: sale.customerName || 'Walk-in Customer',
+        timestamp: new Date(sale.timestamp)
+      });
+
+      await emailReceipt({
+        ...sale,
+        email,
+        receiptHTML
+      });
+      
       alert('Receipt sent successfully!');
     } catch (error) {
       console.error('Error sending receipt:', error);
@@ -187,7 +225,7 @@ export default function Sales() {
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex justify-end space-x-2">
                     <button
-                      onClick={() => window.print()}
+                      onClick={() => handlePrintReceipt(sale)}
                       className="text-gray-600 hover:text-primary-600"
                     >
                       <FiPrinter className="w-5 h-5" />
