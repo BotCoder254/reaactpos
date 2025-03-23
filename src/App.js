@@ -12,6 +12,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SalesGoalsProvider } from './contexts/SalesGoalsContext';
 import { HeldTransactionsProvider } from './contexts/HeldTransactionsContext';
 import { RefundProvider } from './contexts/RefundContext';
+import { LoyaltyProvider } from './contexts/LoyaltyContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -29,6 +30,7 @@ import ExpenseManager from './pages/ExpenseManager';
 import ProfitLossStatement from './components/analytics/ProfitLossStatement';
 import RefundManager from './components/refunds/RefundManager';
 import RefundRequest from './components/refunds/RefundRequest';
+import LoyaltyDashboard from './components/loyalty/LoyaltyDashboard';
 
 function AppContent() {
   const location = useLocation();
@@ -63,6 +65,7 @@ function AppContent() {
               <Route path="/expenses" element={<PrivateRoute><ExpenseManager /></PrivateRoute>} />
               <Route path="/profit-loss" element={<PrivateRoute><ProfitLossStatement /></PrivateRoute>} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route path="/loyalty" element={<PrivateRoute><LoyaltyDashboard /></PrivateRoute>} />
               <Route 
                 path="/refunds" 
                 element={
@@ -93,7 +96,9 @@ function App() {
         <SalesGoalsProvider>
           <HeldTransactionsProvider>
             <RefundProvider>
-              <AppContent />
+              <LoyaltyProvider>
+                <AppContent />
+              </LoyaltyProvider>
             </RefundProvider>
           </HeldTransactionsProvider>
         </SalesGoalsProvider>
