@@ -1,26 +1,27 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
-import { getLowStockItems } from '../../utils/firebaseQueries';
+import { useInventory } from '../../contexts/InventoryContext';
 
 export default function LowStockAlert() {
+  const { products, loading } = useInventory();
   const [lowStockItems, setLowStockItems] = useState([]);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchLowStockItems() {
-      try {
-        const data = await getLowStockItems();
-        setLowStockItems(data);
-      } catch (error) {
-        console.error('Error fetching low stock items:', error);
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchLowStockItems();
-  }, []);
+    if (!products) return;
+    
+    const items = products.filter(product => 
+      product.stock <= product.minStockThreshold
+    ).map(product => ({
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      currentStock: product.stock,
+      minStock: product.minStockThreshold
+    }));
+    
+    setLowStockItems(items);
+  }, [products]);
 
   if (loading) {
     return (

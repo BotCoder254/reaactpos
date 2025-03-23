@@ -35,6 +35,7 @@ import LoyaltyDashboard from './components/loyalty/LoyaltyDashboard';
 import Inventory from './pages/Inventory';
 import StockManagement from './pages/StockManagement';
 import LowStockAlerts from './pages/LowStockAlerts';
+import InventoryDashboard from './components/inventory/InventoryDashboard';
 
 function AppContent() {
   const location = useLocation();
@@ -56,6 +57,7 @@ function AppContent() {
               <Route path="/pos" element={<PrivateRoute><POS /></PrivateRoute>} />
               <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
               <Route path="/inventory" element={<PrivateRoute><Inventory /></PrivateRoute>} />
+              <Route path="/inventory/dashboard" element={<PrivateRoute><InventoryDashboard /></PrivateRoute>} />
               {userRole === 'manager' && (
                 <>
                   <Route path="/inventory/stock" element={<PrivateRoute><StockManagement /></PrivateRoute>} />
