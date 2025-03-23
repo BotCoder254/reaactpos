@@ -9,14 +9,18 @@ import {
   FiFileText, 
   FiPackage,
   FiSend,
-  FiAlertCircle
+  FiAlertCircle,
+  FiClock,
+  FiCheckCircle,
+  FiXCircle,
+  FiList
 } from 'react-icons/fi';
 import { useRefund } from '../../contexts/RefundContext';
 import { getProducts } from '../../utils/inventoryQueries';
 import { getOrders } from '../../utils/orderQueries';
 
 export default function RefundRequest() {
-  const { initiateRefund, loading, error } = useRefund();
+  const { initiateRefund, loading, error, refundRequests } = useRefund();
   const [orderId, setOrderId] = useState('');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
@@ -30,6 +34,7 @@ export default function RefundRequest() {
   const [orders, setOrders] = useState([]);
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [showOrderSearch, setShowOrderSearch] = useState(false);
+  const [showRefundHistory, setShowRefundHistory] = useState(false);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -146,10 +151,68 @@ export default function RefundRequest() {
       className="max-w-2xl mx-auto"
     >
       <div className="bg-white shadow-sm rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-6 flex items-center">
-          <FiFileText className="w-5 h-5 mr-2" />
-          Request a Refund
-        </h2>
+        <div className="flex justify-between items-center mb-6">
+          <h2 className="text-lg font-medium text-gray-900 flex items-center">
+            <FiFileText className="w-5 h-5 mr-2" />
+            Request a Refund
+          </h2>
+          <button
+            type="button"
+            onClick={() => setShowRefundHistory(!showRefundHistory)}
+            className="flex items-center text-sm text-primary-600 hover:text-primary-700"
+          >
+            <FiList className="w-4 h-4 mr-1" />
+            {showRefundHistory ? 'Hide History' : 'Show History'}
+          </button>
+        </div>
+
+        {showRefundHistory && refundRequests && refundRequests.length > 0 && (
+          <div className="mb-6 bg-gray-50 rounded-lg p-4">
+            <h3 className="text-sm font-medium text-gray-700 mb-3">Your Refund Requests</h3>
+            <div className="space-y-3">
+              {refundRequests.map((request) => (
+                <div key={request.id} className="bg-white p-3 rounded-md shadow-sm border border-gray-200">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        Order: {request.orderId}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Product: {request.productName}
+                      </p>
+                      <p className="text-sm text-gray-500">
+                        Amount: ${request.amount.toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="flex items-center">
+                      {request.status === 'pending' && (
+                        <span className="flex items-center text-yellow-600 text-sm">
+                          <FiClock className="w-4 h-4 mr-1" />
+                          Pending
+                        </span>
+                      )}
+                      {request.status === 'approved' && (
+                        <span className="flex items-center text-green-600 text-sm">
+                          <FiCheckCircle className="w-4 h-4 mr-1" />
+                          Approved
+                        </span>
+                      )}
+                      {request.status === 'rejected' && (
+                        <span className="flex items-center text-red-600 text-sm">
+                          <FiXCircle className="w-4 h-4 mr-1" />
+                          Rejected
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Submitted: {new Date(request.createdAt).toLocaleString()}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {(error || submitError) && (
           <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4 flex items-center">
