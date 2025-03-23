@@ -8,9 +8,10 @@ import Orders from './pages/Orders';
 import Checkout from './pages/Checkout';
 import Discounts from './pages/Discounts';
 import DiscountBanner from './components/discounts/DiscountBanner';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SalesGoalsProvider } from './contexts/SalesGoalsContext';
 import { HeldTransactionsProvider } from './contexts/HeldTransactionsContext';
+import { RefundProvider } from './contexts/RefundContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -26,6 +27,8 @@ import SalesGoals from './pages/SalesGoals';
 import Marketing from './pages/Marketing';
 import ExpenseManager from './pages/ExpenseManager';
 import ProfitLossStatement from './components/analytics/ProfitLossStatement';
+import RefundManager from './components/refunds/RefundManager';
+import RefundRequest from './components/refunds/RefundRequest';
 
 function AppContent() {
   const location = useLocation();
@@ -60,6 +63,16 @@ function AppContent() {
               <Route path="/expenses" element={<PrivateRoute><ExpenseManager /></PrivateRoute>} />
               <Route path="/profit-loss" element={<PrivateRoute><ProfitLossStatement /></PrivateRoute>} />
               <Route path="/checkout" element={<Checkout />} />
+              <Route 
+                path="/refunds" 
+                element={
+                  <PrivateRoute>
+                    <RefundProvider>
+                      <RefundRouteComponent />
+                    </RefundProvider>
+                  </PrivateRoute>
+                } 
+              />
             </Routes>
           </div>
         </main>
@@ -68,13 +81,20 @@ function AppContent() {
   );
 }
 
+function RefundRouteComponent() {
+  const { userRole } = useAuth();
+  return userRole === 'manager' ? <RefundManager /> : <RefundRequest />;
+}
+
 function App() {
   return (
     <Router>
       <AuthProvider>
         <SalesGoalsProvider>
           <HeldTransactionsProvider>
-            <AppContent />
+            <RefundProvider>
+              <AppContent />
+            </RefundProvider>
           </HeldTransactionsProvider>
         </SalesGoalsProvider>
       </AuthProvider>

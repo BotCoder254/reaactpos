@@ -18,6 +18,7 @@ import {
   PhotoIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
+import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw } from 'react-icons/fi';
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -44,7 +45,8 @@ export default function Sidebar() {
     { name: 'Expenses', icon: ChartBarIcon, path: '/expenses' },
     { name: 'Reports', icon: DocumentTextIcon, path: '/reports' },
     { name: 'Profit and Loss', icon: ChartBarIcon, path: '/profit-loss' },
-    { name: 'Settings', icon: CogIcon, path: '/settings' }
+    { name: 'Settings', icon: CogIcon, path: '/settings' },
+    { name: 'Refunds', icon: FiRefreshCcw, path: '/refunds' }
   ];
 
   const cashierNavItems = [
@@ -57,7 +59,8 @@ export default function Sidebar() {
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
-    { name: 'Settings', icon: CogIcon, path: '/settings' }
+    { name: 'Settings', icon: CogIcon, path: '/settings' },
+    { name: 'Refunds', icon: FiRefreshCcw, path: '/refunds' }
   ];
 
   const navItems = userRole === 'manager' ? managerNavItems : cashierNavItems;
