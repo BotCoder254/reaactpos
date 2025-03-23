@@ -28,6 +28,8 @@ import { db } from '../firebase';
 import { getEmployeeStats } from '../utils/employeeQueries';
 import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../utils/dynamicPricingQueries';
 import { getReceiptBranding, generateReceiptHTML } from '../utils/receiptQueries';
+import ChangeCalculator from '../components/transactions/ChangeCalculator';
+import { toast } from 'react-hot-toast';
 
 export default function POS() {
   const [products, setProducts] = useState({});
@@ -56,6 +58,8 @@ export default function POS() {
   const ITEMS_PER_PAGE = 12;
   const [receiptBranding, setReceiptBranding] = useState(null);
   const { holdTransaction, resumeTransaction } = useHeldTransactions();
+  const [isChangeCalculatorOpen, setIsChangeCalculatorOpen] = useState(false);
+  const [currentPaymentMethod, setCurrentPaymentMethod] = useState(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -284,55 +288,48 @@ export default function POS() {
     }
   };
 
-  const handleCheckout = async (paymentMethod) => {
+  const handlePaymentComplete = async (cashReceived, change) => {
     try {
-      setProcessing(true);
+      setIsChangeCalculatorOpen(false);
       
-      const subtotal = calculateTotal();
       const saleData = {
         items: cart,
-        subtotal: subtotal,
-        discount: discountAmount,
-        discountId: selectedDiscount?.id,
-        discountName: selectedDiscount?.name,
-        discountType: selectedDiscount?.type,
-        discountValue: selectedDiscount?.value,
+        subtotal: calculateTotal(),
         tax: calculateTax(),
-        total: subtotal - discountAmount + calculateTax(),
-        paymentMethod,
+        total: calculateTotal(),
+        cashReceived: cashReceived,
+        change: change,
+        paymentMethod: currentPaymentMethod,
         cashierId: currentUser.uid,
-        cashierName: currentUser.email,
+        cashierName: currentUser.displayName || currentUser.email,
         timestamp: new Date(),
-        ...(selectedCustomer && { 
-          customerId: selectedCustomer.id,
-          customerName: selectedCustomer.name
-        })
+        customerName: selectedCustomer?.name,
+        customerId: selectedCustomer?.id
       };
 
-      // Create the sale record
-      const saleId = await createSale(saleData);
+      // Create the sale
+      await createSale(saleData);
 
-      // Update customer data if a customer was selected
-      if (selectedCustomer) {
-        await updateCustomerAfterPurchase(
-          selectedCustomer.id,
-          saleData.total
-        );
-      }
-
-      // Clear cart, customer selection, and discount
+      // Reset the cart and related states
       setCart([]);
       setSelectedCustomer(null);
-      setSelectedDiscount(null);
       setDiscountAmount(0);
-      
+      setTaxAmount(0);
+
       // Show success message
-      alert('Sale completed successfully!');
+      toast.success('Sale completed successfully!');
     } catch (error) {
-      console.error('Error processing sale:', error);
-      alert('Failed to process sale');
-    } finally {
-      setProcessing(false);
+      console.error('Error completing sale:', error);
+      toast.error('Failed to complete sale');
+    }
+  };
+
+  const handleCheckout = (paymentMethod) => {
+    setCurrentPaymentMethod(paymentMethod);
+    if (paymentMethod === 'cash') {
+      setIsChangeCalculatorOpen(true);
+    } else {
+      handlePaymentComplete(calculateTotal(), 0);
     }
   };
 
@@ -829,6 +826,13 @@ export default function POS() {
           </div>
         </div>
       </div>
+
+      <ChangeCalculator
+        isOpen={isChangeCalculatorOpen}
+        onClose={() => setIsChangeCalculatorOpen(false)}
+        totalAmount={calculateTotal()}
+        onComplete={handlePaymentComplete}
+      />
 
       <CustomerModal
         isOpen={isCustomerModalOpen}
