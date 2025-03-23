@@ -12,9 +12,12 @@ import {
   FiUserPlus,
   FiX,
   FiTag,
-  FiTrendingUp
+  FiTrendingUp,
+  FiPause,
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
+import { useHeldTransactions } from '../contexts/HeldTransactionsContext';
+import HeldTransactions from '../components/transactions/HeldTransactions';
 import { getProducts } from '../utils/inventoryQueries';
 import { createSale, emailReceipt } from '../utils/salesQueries';
 import { searchCustomers, quickSearchCustomers, updateCustomerAfterPurchase } from '../utils/customerQueries';
@@ -42,6 +45,7 @@ export default function POS() {
   const [activeDiscounts, setActiveDiscounts] = useState([]);
   const [selectedDiscount, setSelectedDiscount] = useState(null);
   const [discountAmount, setDiscountAmount] = useState(0);
+  const [taxAmount, setTaxAmount] = useState(0);
   const { currentUser } = useAuth();
   const [cashierStats, setCashierStats] = useState(null);
   const [dynamicPricingRules, setDynamicPricingRules] = useState([]);
@@ -51,6 +55,7 @@ export default function POS() {
   const [loadingMore, setLoadingMore] = useState(false);
   const ITEMS_PER_PAGE = 12;
   const [receiptBranding, setReceiptBranding] = useState(null);
+  const { holdTransaction, resumeTransaction } = useHeldTransactions();
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -122,9 +127,9 @@ export default function POS() {
     if (!products || Object.keys(products).length === 0) return;
     
     const filtered = Object.values(products).filter(
-      (product) =>
-        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.category.toLowerCase().includes(searchTerm.toLowerCase())
+        (product) =>
+          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          product.category.toLowerCase().includes(searchTerm.toLowerCase())
     );
     setFilteredProducts(filtered);
   }, [searchTerm, products]);
@@ -385,6 +390,34 @@ export default function POS() {
     printWindow.print();
   };
 
+  const handleHoldTransaction = () => {
+    if (!cart.length) return;
+    
+    const transaction = {
+      items: cart,
+      total: calculateTotal(),
+      customer: selectedCustomer,
+      timestamp: new Date().toISOString()
+    };
+    
+    holdTransaction(transaction);
+    setCart([]);
+    setSelectedCustomer(null);
+    setDiscountAmount(0);
+    setTaxAmount(0);
+  };
+
+  const handleResumeTransaction = (transactionId) => {
+    const transaction = resumeTransaction(transactionId);
+    if (!transaction) return;
+    
+    setCart(transaction.items);
+    if (transaction.customer) {
+      setSelectedCustomer(transaction.customer);
+    }
+    calculateTotal();
+  };
+
   const renderProduct = (product) => (
     <motion.div
       key={product.id}
@@ -473,7 +506,7 @@ export default function POS() {
     <div className="flex h-screen bg-gray-100">
       {/* Products Section */}
       <div className="flex-1 p-6 overflow-auto">
-        {/* Add cashier performance indicator */}
+        {/* Cashier Stats */}
         {cashierStats && (
           <div className="mb-4 p-2 bg-white rounded-lg shadow-sm flex items-center justify-between">
             <div className="flex items-center">
@@ -489,7 +522,11 @@ export default function POS() {
             </span>
           </div>
         )}
-        
+
+        {/* Held Transactions Section */}
+        <HeldTransactions onResume={handleResumeTransaction} />
+
+        {/* Search Bar */}
         <div className="mb-6">
           <div className="relative">
             <FiSearch className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
@@ -725,6 +762,13 @@ export default function POS() {
           </div>
 
           <div className="space-y-2">
+            <button
+              onClick={handleHoldTransaction}
+              className="w-full py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+            >
+              <FiPause className="mr-2 h-5 w-5" />
+              Hold Transaction
+            </button>
             <button
               onClick={() => handleCheckout('cash')}
               disabled={cart.length === 0 || processing}

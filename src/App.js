@@ -10,6 +10,7 @@ import Discounts from './pages/Discounts';
 import DiscountBanner from './components/discounts/DiscountBanner';
 import { AuthProvider } from './contexts/AuthContext';
 import { SalesGoalsProvider } from './contexts/SalesGoalsContext';
+import { HeldTransactionsProvider } from './contexts/HeldTransactionsContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -72,7 +73,9 @@ function App() {
     <Router>
       <AuthProvider>
         <SalesGoalsProvider>
-          <AppContent />
+          <HeldTransactionsProvider>
+            <AppContent />
+          </HeldTransactionsProvider>
         </SalesGoalsProvider>
       </AuthProvider>
     </Router>
