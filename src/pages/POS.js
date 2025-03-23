@@ -26,7 +26,7 @@ import { getEmployeeStats } from '../utils/employeeQueries';
 import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../utils/dynamicPricingQueries';
 
 export default function POS() {
-  const [products, setProducts] = useState([]);
+  const [products, setProducts] = useState({});
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [cart, setCart] = useState([]);
@@ -45,21 +45,29 @@ export default function POS() {
   const [cashierStats, setCashierStats] = useState(null);
   const [dynamicPricingRules, setDynamicPricingRules] = useState([]);
   const [originalPrices, setOriginalPrices] = useState({});
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const ITEMS_PER_PAGE = 12;
 
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const productsRef = collection(db, 'products');
-        const q = query(productsRef, where('active', '==', true));
-        const querySnapshot = await getDocs(q);
+        setLoading(true);
+        setError(null);
+        const productsData = await getProducts();
         
         const fetchedProducts = {};
-        const originalPrices = {};
+        const prices = {};
         
-        querySnapshot.docs.forEach(doc => {
-          const product = { id: doc.id, ...doc.data() };
-          fetchedProducts[doc.id] = product;
-          originalPrices[doc.id] = product.price;
+        productsData.forEach(product => {
+          fetchedProducts[product.id] = {
+            ...product,
+            price: Number(product.price),
+            stock: Number(product.stock),
+            inCart: false
+          };
+          prices[product.id] = product.price;
         });
 
         // Apply dynamic pricing rules
@@ -67,16 +75,18 @@ export default function POS() {
           const product = fetchedProducts[productId];
           const dynamicPrice = calculateDynamicPrice(product.price, dynamicPricingRules);
           product.price = dynamicPrice;
-          product.originalPrice = originalPrices[productId];
+          product.originalPrice = prices[productId];
         });
 
         setProducts(fetchedProducts);
-        setOriginalPrices(originalPrices);
-        setFilteredProducts(Object.values(fetchedProducts));
-        setLoading(false);
+        setOriginalPrices(prices);
+        setFilteredProducts(Object.values(fetchedProducts).slice(0, ITEMS_PER_PAGE));
+        setHasMore(Object.values(fetchedProducts).length > ITEMS_PER_PAGE);
+        setError(null);
       } catch (error) {
         console.error('Error fetching products:', error);
         setError('Failed to load products');
+      } finally {
         setLoading(false);
       }
     };
@@ -107,13 +117,14 @@ export default function POS() {
   }, [selectedDiscount, cart]);
 
   useEffect(() => {
-    setFilteredProducts(
-      Object.values(products).filter(
-        (product) =>
-          product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          product.category.toLowerCase().includes(searchTerm.toLowerCase())
-      )
+    if (!products || Object.keys(products).length === 0) return;
+    
+    const filtered = Object.values(products).filter(
+      (product) =>
+        product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        product.category.toLowerCase().includes(searchTerm.toLowerCase())
     );
+    setFilteredProducts(filtered);
   }, [searchTerm, products]);
 
   useEffect(() => {
@@ -161,8 +172,42 @@ export default function POS() {
     setShowCustomerSearch(false);
   };
 
+  const loadMoreProducts = () => {
+    if (loadingMore || !hasMore) return;
+    
+    setLoadingMore(true);
+    const currentProducts = Object.values(products);
+    const nextProducts = currentProducts.slice(
+      filteredProducts.length,
+      filteredProducts.length + ITEMS_PER_PAGE
+    );
+    
+    setFilteredProducts(prev => [...prev, ...nextProducts]);
+    setHasMore(filteredProducts.length + nextProducts.length < currentProducts.length);
+    setLoadingMore(false);
+  };
+
+  useEffect(() => {
+    const handleScroll = () => {
+      if (
+        window.innerHeight + document.documentElement.scrollTop
+        === document.documentElement.offsetHeight
+      ) {
+        loadMoreProducts();
+      }
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [filteredProducts, products]);
+
   const addToCart = (product) => {
-    const dynamicPrice = calculateDynamicPrice(product.originalPrice || product.price, dynamicPricingRules);
+    if (products[product.id].inCart) return;
+    
+    const dynamicPrice = calculateDynamicPrice(
+      product.originalPrice || product.price,
+      dynamicPricingRules
+    );
     
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.id === product.id);
@@ -175,6 +220,11 @@ export default function POS() {
       }
       return [...prevCart, { ...product, quantity: 1, price: dynamicPrice }];
     });
+
+    setProducts(prev => ({
+      ...prev,
+      [product.id]: { ...prev[product.id], inCart: true }
+    }));
   };
 
   const updateQuantity = (productId, change) => {
@@ -191,6 +241,10 @@ export default function POS() {
 
   const removeFromCart = (productId) => {
     setCart((prevCart) => prevCart.filter((item) => item.id !== productId));
+    setProducts(prev => ({
+      ...prev,
+      [productId]: { ...prev[productId], inCart: false }
+    }));
   };
 
   const calculateTotal = () => {
@@ -282,19 +336,38 @@ export default function POS() {
   const renderProduct = (product) => (
     <motion.div
       key={product.id}
-      className="bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-pointer"
-      onClick={() => addToCart(product)}
-      whileHover={{ scale: 1.02 }}
-      whileTap={{ scale: 0.98 }}
+      className={`bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow relative ${
+        products[product.id]?.inCart ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+      }`}
+      onClick={() => !products[product.id]?.inCart && addToCart(product)}
+      whileHover={{ scale: !products[product.id]?.inCart ? 1.02 : 1 }}
+      whileTap={{ scale: !products[product.id]?.inCart ? 0.98 : 1 }}
     >
-      {product.image && (
-        <img
-          src={product.image}
-          alt={product.name}
-          className="w-full h-32 object-cover rounded-md mb-2"
-        />
-      )}
-      <h3 className="font-medium text-gray-900">{product.name}</h3>
+      <div className="relative">
+        {product.images && product.images.length > 0 ? (
+          <img
+            src={product.images[0]}
+            alt={product.name}
+            className="w-full h-32 object-cover rounded-md mb-2"
+          />
+        ) : (
+          <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded-md mb-2">
+            <FiImage className="w-8 h-8 text-gray-400" />
+          </div>
+        )}
+        {product.stock <= 10 && (
+          <div className="absolute top-2 right-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
+            Low Stock
+          </div>
+        )}
+        {products[product.id]?.inCart && (
+          <div className="absolute inset-0 bg-gray-900 bg-opacity-50 rounded-md flex items-center justify-center">
+            <span className="text-white text-sm font-medium">In Cart</span>
+          </div>
+        )}
+      </div>
+      <h3 className="font-medium text-gray-900 truncate">{product.name}</h3>
+      <p className="text-sm text-gray-500 truncate">{product.description}</p>
       <div className="mt-1">
         {product.price !== originalPrices[product.id] ? (
           <div className="space-y-1">
@@ -304,6 +377,9 @@ export default function POS() {
             <span className="text-primary-600 font-semibold block">
               ${product.price.toFixed(2)}
             </span>
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              Special Price
+            </span>
           </div>
         ) : (
           <span className="text-gray-900 font-semibold">
@@ -311,26 +387,25 @@ export default function POS() {
           </span>
         )}
       </div>
-      {product.price !== originalPrices[product.id] && (
-        <span className="inline-flex items-center px-2 py-1 mt-2 rounded-full text-xs font-medium bg-green-100 text-green-800">
-          Special Price
-        </span>
-      )}
+      <div className="mt-1 text-sm text-gray-500">
+        Stock: {product.stock}
+      </div>
     </motion.div>
   );
 
   const handleProductSearch = (term) => {
     setSearchTerm(term);
+    if (!products || Object.keys(products).length === 0) return;
+    
     if (term.trim() === '') {
       setFilteredProducts(Object.values(products));
     } else {
-      setFilteredProducts(
-        Object.values(products).filter(
-          (product) =>
-            product.name.toLowerCase().includes(term.toLowerCase()) ||
-            product.category.toLowerCase().includes(term.toLowerCase())
-        )
+      const filtered = Object.values(products).filter(
+        (product) =>
+          product.name.toLowerCase().includes(term.toLowerCase()) ||
+          product.category.toLowerCase().includes(term.toLowerCase())
       );
+      setFilteredProducts(filtered);
     }
   };
 
@@ -377,7 +452,26 @@ export default function POS() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredProducts.map((product) => renderProduct(product))}
+          {loading ? (
+            // Loading skeleton
+            Array.from({ length: 8 }).map((_, index) => (
+              <div key={index} className="bg-white p-4 rounded-lg shadow-sm animate-pulse">
+                <div className="w-full h-32 bg-gray-200 rounded-md mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              </div>
+            ))
+          ) : error ? (
+            <div className="col-span-full text-center text-red-600">
+              {error}
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="col-span-full text-center text-gray-500">
+              No products found.
+            </div>
+          ) : (
+            filteredProducts.map((product) => renderProduct(product))
+          )}
         </div>
       </div>
 
