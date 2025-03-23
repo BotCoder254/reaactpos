@@ -43,6 +43,7 @@ export default function Sidebar() {
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Expenses', icon: ChartBarIcon, path: '/expenses' },
     { name: 'Reports', icon: DocumentTextIcon, path: '/reports' },
+    { name: 'Profit and Loss', icon: ChartBarIcon, path: '/profit-loss' },
     { name: 'Settings', icon: CogIcon, path: '/settings' }
   ];
 
