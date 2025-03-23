@@ -1,6 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FiCheck, FiX, FiFilter, FiDownload, FiEye, FiChevronDown, FiChevronUp } from 'react-icons/fi';
+import { 
+  FiFilter, 
+  FiDownload, 
+  FiCheck, 
+  FiX, 
+  FiClock,
+  FiDollarSign,
+  FiRefreshCw,
+  FiPercent,
+  FiBarChart2,
+  FiCalendar,
+  FiCheckCircle,
+  FiXCircle,
+  FiAlertCircle,
+  FiChevronUp,
+  FiChevronDown,
+  FiEye
+} from 'react-icons/fi';
 import { useRefund } from '../../contexts/RefundContext';
 import { getRefundAnalytics } from '../../utils/refundQueries';
 import { format } from 'date-fns';
@@ -128,50 +145,74 @@ export default function RefundManager() {
   return (
     <div className="space-y-6">
       {/* Analytics Cards */}
-      {analytics && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <div className="bg-white p-4 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-gray-500">Total Refunds</h3>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">{analytics.totalRefunds}</p>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-gray-500">Total Amount</h3>
-            <p className="mt-1 text-2xl font-semibold text-gray-900">${analytics.totalAmount.toFixed(2)}</p>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-gray-500">Approved</h3>
-            <p className="mt-1 text-2xl font-semibold text-green-600">{analytics.approvedRefunds}</p>
-          </div>
-          <div className="bg-white p-4 rounded-lg shadow-sm">
-            <h3 className="text-sm font-medium text-gray-500">Rejected</h3>
-            <p className="mt-1 text-2xl font-semibold text-red-600">{analytics.rejectedRefunds}</p>
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Total Refunds</p>
+              <h3 className="text-2xl font-bold text-gray-900">{analytics?.totalRefunds || 0}</h3>
+            </div>
+            <FiBarChart2 className="h-8 w-8 text-primary-500" />
           </div>
         </div>
-      )}
 
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-lg shadow-sm">
-        <div className="flex flex-wrap gap-4 items-center">
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Status</label>
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Total Amount</p>
+              <h3 className="text-2xl font-bold text-gray-900">
+                ${analytics?.totalAmount?.toFixed(2) || '0.00'}
+              </h3>
+            </div>
+            <FiDollarSign className="h-8 w-8 text-green-500" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Approval Rate</p>
+              <h3 className="text-2xl font-bold text-gray-900">
+                {((analytics?.approvedRefunds / analytics?.totalRefunds) * 100 || 0).toFixed(1)}%
+              </h3>
+            </div>
+            <FiPercent className="h-8 w-8 text-blue-500" />
+          </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-lg shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Processing Time</p>
+              <h3 className="text-2xl font-bold text-gray-900">24h</h3>
+            </div>
+            <FiClock className="h-8 w-8 text-yellow-500" />
+          </div>
+        </div>
+      </div>
+
+      {/* Filters and Export */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center">
+            <FiFilter className="w-5 h-5 text-gray-400 mr-2" />
             <select
               value={filters.status}
               onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+              className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
             >
-              <option value="all">All Status</option>
+              <option value="all">All Requests</option>
               <option value="pending">Pending</option>
               <option value="approved">Approved</option>
               <option value="rejected">Rejected</option>
             </select>
           </div>
-
-          <div>
-            <label className="block text-sm font-medium text-gray-700">Date Range</label>
+          <div className="flex items-center">
+            <FiCalendar className="w-5 h-5 text-gray-400 mr-2" />
             <select
               value={filters.dateRange}
               onChange={(e) => setFilters(prev => ({ ...prev, dateRange: e.target.value }))}
-              className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm rounded-md"
+              className="rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
             >
               <option value="7days">Last 7 Days</option>
               <option value="30days">Last 30 Days</option>
@@ -179,19 +220,18 @@ export default function RefundManager() {
               <option value="all">All Time</option>
             </select>
           </div>
-
-          <button
-            onClick={exportToCSV}
-            className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-          >
-            <FiDownload className="-ml-1 mr-2 h-5 w-5" />
-            Export
-          </button>
         </div>
+        <button
+          onClick={exportToCSV}
+          className="flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+        >
+          <FiDownload className="w-4 h-4 mr-2" />
+          Export
+        </button>
       </div>
 
       {/* Refund Requests Table */}
-      <div className="bg-white shadow-sm rounded-lg">
+      <div className="bg-white shadow-sm rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-gray-200">
             <thead className="bg-gray-50">
@@ -243,13 +283,18 @@ export default function RefundManager() {
                     {request.cashierName}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      request.status === 'approved' ? 'bg-green-100 text-green-800' :
-                      request.status === 'rejected' ? 'bg-red-100 text-red-800' :
-                      'bg-yellow-100 text-yellow-800'
-                    }`}>
-                      {request.status}
-                    </span>
+                    <div className="flex items-center">
+                      {request.status === 'pending' && <FiClock className="w-4 h-4 text-yellow-500 mr-2" />}
+                      {request.status === 'approved' && <FiCheckCircle className="w-4 h-4 text-green-500 mr-2" />}
+                      {request.status === 'rejected' && <FiXCircle className="w-4 h-4 text-red-500 mr-2" />}
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        request.status === 'approved' ? 'bg-green-100 text-green-800' :
+                        request.status === 'rejected' ? 'bg-red-100 text-red-800' :
+                        'bg-yellow-100 text-yellow-800'
+                      }`}>
+                        {request.status}
+                      </span>
+                    </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     <div className="flex space-x-2">
@@ -263,20 +308,22 @@ export default function RefundManager() {
                         <FiEye className="h-5 w-5" />
                       </button>
                       {request.status === 'pending' && (
-                        <>
+                        <div className="flex items-center justify-end space-x-2">
                           <button
                             onClick={() => handleAction(request.id, 'approved')}
-                            className="text-green-600 hover:text-green-900"
+                            className="text-green-600 hover:text-green-900 flex items-center"
                           >
+                            <FiCheck className="w-4 h-4 mr-1" />
                             Approve
                           </button>
                           <button
                             onClick={() => handleAction(request.id, 'rejected')}
-                            className="text-red-600 hover:text-red-900"
+                            className="text-red-600 hover:text-red-900 flex items-center"
                           >
+                            <FiX className="w-4 h-4 mr-1" />
                             Reject
                           </button>
-                        </>
+                        </div>
                       )}
                     </div>
                   </td>

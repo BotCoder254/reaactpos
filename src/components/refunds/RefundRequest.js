@@ -1,6 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FiUpload, FiX, FiSearch } from 'react-icons/fi';
+import { 
+  FiUpload, 
+  FiX, 
+  FiSearch, 
+  FiDollarSign, 
+  FiHash, 
+  FiFileText, 
+  FiPackage,
+  FiSend,
+  FiAlertCircle
+} from 'react-icons/fi';
 import { useRefund } from '../../contexts/RefundContext';
 import { getProducts } from '../../utils/inventoryQueries';
 
@@ -96,12 +106,14 @@ export default function RefundRequest() {
       className="max-w-2xl mx-auto"
     >
       <div className="bg-white shadow-sm rounded-lg p-6">
-        <h2 className="text-lg font-medium text-gray-900 mb-6">
+        <h2 className="text-lg font-medium text-gray-900 mb-6 flex items-center">
+          <FiFileText className="w-5 h-5 mr-2" />
           Request a Refund
         </h2>
 
         {(error || submitError) && (
-          <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4">
+          <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4 flex items-center">
+            <FiAlertCircle className="w-5 h-5 text-red-400 mr-2" />
             <p className="text-red-700">{error || submitError}</p>
           </div>
         )}
@@ -110,8 +122,9 @@ export default function RefundRequest() {
           <div>
             <label
               htmlFor="orderId"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-gray-700 flex items-center"
             >
+              <FiHash className="w-4 h-4 mr-1" />
               Order ID
             </label>
             <input
@@ -125,7 +138,8 @@ export default function RefundRequest() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 flex items-center">
+              <FiPackage className="w-4 h-4 mr-1" />
               Product
             </label>
             <div className="relative">
@@ -185,8 +199,9 @@ export default function RefundRequest() {
           <div>
             <label
               htmlFor="amount"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-gray-700 flex items-center"
             >
+              <FiDollarSign className="w-4 h-4 mr-1" />
               Refund Amount
             </label>
             <div className="mt-1 relative rounded-md shadow-sm">
@@ -209,8 +224,9 @@ export default function RefundRequest() {
           <div>
             <label
               htmlFor="reason"
-              className="block text-sm font-medium text-gray-700"
+              className="block text-sm font-medium text-gray-700 flex items-center"
             >
+              <FiFileText className="w-4 h-4 mr-1" />
               Reason for Refund
             </label>
             <textarea
@@ -224,7 +240,8 @@ export default function RefundRequest() {
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700">
+            <label className="block text-sm font-medium text-gray-700 flex items-center">
+              <FiUpload className="w-4 h-4 mr-1" />
               Receipt Upload
             </label>
             <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
@@ -277,10 +294,11 @@ export default function RefundRequest() {
             <button
               type="submit"
               disabled={loading}
-              className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
+              className={`w-full flex justify-center items-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
+              <FiSend className="w-4 h-4 mr-2" />
               {loading ? 'Submitting...' : 'Submit Refund Request'}
             </button>
           </div>
