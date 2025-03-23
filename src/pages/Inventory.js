@@ -103,9 +103,9 @@ export default function Inventory() {
                 onChange={(e) => setFilters(prev => ({ ...prev, category: e.target.value }))}
                 className="border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="">All Categories</option>
-                {categories.map(category => (
-                  <option key={category} value={category}>{category}</option>
+                <option key="all-categories" value="">All Categories</option>
+                {categories.filter(Boolean).map(category => (
+                  <option key={`category-${category}`} value={category}>{category}</option>
                 ))}
               </select>
               <select
@@ -113,9 +113,9 @@ export default function Inventory() {
                 onChange={(e) => setFilters(prev => ({ ...prev, supplier: e.target.value }))}
                 className="border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="">All Suppliers</option>
-                {suppliers.map(supplier => (
-                  <option key={supplier} value={supplier}>{supplier}</option>
+                <option key="all-suppliers" value="">All Suppliers</option>
+                {suppliers.filter(Boolean).map(supplier => (
+                  <option key={`supplier-${supplier}`} value={supplier}>{supplier}</option>
                 ))}
               </select>
               <select
@@ -123,10 +123,10 @@ export default function Inventory() {
                 onChange={(e) => setFilters(prev => ({ ...prev, stockStatus: e.target.value }))}
                 className="border border-gray-300 rounded-md shadow-sm focus:ring-primary-500 focus:border-primary-500"
               >
-                <option value="">All Stock Status</option>
-                <option value="inStock">In Stock</option>
-                <option value="lowStock">Low Stock</option>
-                <option value="outOfStock">Out of Stock</option>
+                <option key="all-stock" value="">All Stock Status</option>
+                <option key="in-stock" value="inStock">In Stock</option>
+                <option key="low-stock" value="lowStock">Low Stock</option>
+                <option key="out-of-stock" value="outOfStock">Out of Stock</option>
               </select>
             </>
           )}

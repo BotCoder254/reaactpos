@@ -34,7 +34,7 @@ export default function Sidebar() {
   const managerNavItems = [
     { name: 'Dashboard', icon: HomeIcon, path: '/' },
     { name: 'POS', icon: ShoppingCartIcon, path: '/pos' },
-    { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
+    // { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
     { name: 'Inventory', icon: ArchiveBoxIcon, path: '/inventory' },
     { name: 'Inventory Dashboard', icon: ChartBarIcon, path: '/inventory/dashboard' },
     { name: 'Stock Management', icon: InboxStackIcon, path: '/inventory/stock' },
@@ -46,7 +46,7 @@ export default function Sidebar() {
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
     { name: 'Staff', icon: UsersIcon, path: '/staff' },
     { name: 'Staff Stats', icon: ChartPieIcon, path: '/staff-stats' },
-    { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
+    // { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Discounts', icon: TagIcon, path: '/discounts' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Expenses', icon: ChartBarIcon, path: '/expenses' },

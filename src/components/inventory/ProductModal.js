@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiX, FiUpload, FiTrash2 } from 'react-icons/fi';
 import { addProduct, updateProduct, deleteProductImage } from '../../utils/inventoryQueries';
@@ -7,6 +7,7 @@ import toast from 'react-hot-toast';
 
 export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
   const { addProduct: contextAddProduct, updateProduct: contextUpdateProduct } = useInventory();
+  const fileInputRef = useRef(null);
   const [formData, setFormData] = useState({
     name: '',
     category: '',
@@ -15,9 +16,8 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
     description: '',
     supplier: '',
     minStockThreshold: '',
-    images: []
   });
-  const [images, setImages] = useState([]);
+  const [newImages, setNewImages] = useState([]);
   const [previewUrls, setPreviewUrls] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [existingImages, setExistingImages] = useState([]);
@@ -34,10 +34,14 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
         description: product.description || '',
         supplier: product.supplier || '',
         minStockThreshold: product.minStockThreshold?.toString() || '',
-        images: product.images || []
       });
-      setExistingImages(product.images || []);
-      setPreviewUrls(product.images || []);
+      if (product.images && Array.isArray(product.images)) {
+        setExistingImages(product.images);
+        setPreviewUrls(product.images);
+      } else {
+        setExistingImages([]);
+        setPreviewUrls([]);
+      }
     } else {
       resetForm();
     }
@@ -52,39 +56,73 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
       description: '',
       supplier: '',
       minStockThreshold: '',
-      images: []
     });
-    setImages([]);
+    setNewImages([]);
     setPreviewUrls([]);
     setExistingImages([]);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    setImages((prev) => [...prev, ...files]);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    
+    // Clean up old preview URLs to prevent memory leaks
+    previewUrls.forEach(url => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    
+    const validImageFiles = files.filter(file => file.type.startsWith('image/'));
+    setNewImages(prevImages => [...prevImages, ...validImageFiles]);
 
-    const newPreviewUrls = files.map((file) => URL.createObjectURL(file));
-    setPreviewUrls((prev) => [...prev, ...newPreviewUrls]);
-  };
-
-  const handleRemoveImage = (index) => {
-    setImages((prev) => prev.filter((_, i) => i !== index));
-    setPreviewUrls((prev) => {
-      const newUrls = prev.filter((_, i) => i !== index);
-      prev[index] && URL.revokeObjectURL(prev[index]);
-      return newUrls;
+    const newPreviewUrls = validImageFiles.map(file => URL.createObjectURL(file));
+    setPreviewUrls(prevUrls => {
+      const existingUrls = prevUrls.filter(url => !url.startsWith('blob:'));
+      return [...existingUrls, ...newPreviewUrls];
     });
   };
 
+  const handleRemoveImage = (index) => {
+    const isExistingImage = index < existingImages.length;
+
+    if (isExistingImage) {
+      handleRemoveExistingImage(existingImages[index], index);
+    } else {
+      const newImageIndex = index - existingImages.length;
+      setNewImages(prevImages => {
+        const newImages = [...prevImages];
+        newImages.splice(newImageIndex, 1);
+        return newImages;
+      });
+
+      setPreviewUrls(prevUrls => {
+        const newUrls = [...prevUrls];
+        if (newUrls[index]?.startsWith('blob:')) {
+          URL.revokeObjectURL(newUrls[index]);
+        }
+        newUrls.splice(index, 1);
+        return newUrls;
+      });
+    }
+  };
+
   const handleRemoveExistingImage = async (url, index) => {
-    if (product && window.confirm('Are you sure you want to remove this image?')) {
-      try {
+    if (!product || !url) return;
+
+    try {
+      if (window.confirm('Are you sure you want to remove this image?')) {
         await deleteProductImage(product.id, url);
-        setExistingImages((prev) => prev.filter((_, i) => i !== index));
-      } catch (error) {
-        console.error('Error removing image:', error);
-        alert('Failed to remove image');
+        setExistingImages(prevImages => prevImages.filter((_, i) => i !== index));
+        setPreviewUrls(prevUrls => prevUrls.filter((_, i) => i !== index));
+        toast.success('Image removed successfully');
       }
+    } catch (error) {
+      console.error('Error removing image:', error);
+      toast.error('Failed to remove image');
     }
   };
 
@@ -92,32 +130,42 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setIsSubmitting(true);
 
     try {
       const productData = {
         ...formData,
-        price: Number(formData.price),
-        stock: Number(formData.stock),
-        minStockThreshold: Number(formData.minStockThreshold),
-        images: existingImages,
+        price: Number(formData.price) || 0,
+        stock: Number(formData.stock) || 0,
+        minStockThreshold: Number(formData.minStockThreshold) || 0,
+        images: existingImages || [],
       };
 
       if (product) {
-        await contextUpdateProduct(product.id, productData, images);
+        await contextUpdateProduct(product.id, productData, newImages);
         toast.success('Product updated successfully');
       } else {
-        await contextAddProduct(productData, images);
+        await contextAddProduct(productData, newImages);
         toast.success('Product added successfully');
       }
 
-      onRefetch();
-      onClose();
+      // Clean up blob URLs
+      previewUrls.forEach(url => {
+        if (url.startsWith('blob:')) {
+          URL.revokeObjectURL(url);
+        }
+      });
+
+      onRefetch?.();
+      onClose?.();
       resetForm();
     } catch (err) {
+      console.error('Error submitting product:', err);
       setError(err.message || 'An error occurred');
       toast.error(product ? 'Failed to update product' : 'Failed to add product');
     } finally {
       setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -175,20 +223,22 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                     <label className="block text-sm font-medium text-gray-700">Name</label>
                     <input
                       type="text"
+                      name="name"
                       required
                       value={formData.name}
                       onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Category</label>
                     <input
                       type="text"
+                      name="category"
                       required
                       value={formData.category}
                       onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                     />
                   </div>
                 </div>
@@ -196,10 +246,11 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                 <div>
                   <label className="block text-sm font-medium text-gray-700">Description</label>
                   <textarea
+                    name="description"
                     value={formData.description}
                     onChange={handleChange}
                     rows={3}
-                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                   />
                 </div>
 
@@ -208,22 +259,23 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                     <label className="block text-sm font-medium text-gray-700">Supplier</label>
                     <input
                       type="text"
-                      required
+                      name="supplier"
                       value={formData.supplier}
                       onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                     />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700">Price</label>
                     <input
                       type="number"
+                      name="price"
                       required
                       min="0"
                       step="0.01"
                       value={formData.price}
                       onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                     />
                   </div>
                 </div>
@@ -233,22 +285,24 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                     <label className="block text-sm font-medium text-gray-700">Stock</label>
                     <input
                       type="number"
+                      name="stock"
                       required
                       min="0"
                       value={formData.stock}
                       onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700">Min. Threshold</label>
+                    <label className="block text-sm font-medium text-gray-700">Minimum Stock Threshold</label>
                     <input
                       type="number"
+                      name="minStockThreshold"
                       required
                       min="0"
                       value={formData.minStockThreshold}
                       onChange={handleChange}
-                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                     />
                   </div>
                 </div>
@@ -264,6 +318,7 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                         multiple
                         accept="image/*"
                         onChange={handleImageChange}
+                        ref={fileInputRef}
                         className="hidden"
                       />
                     </label>

@@ -6,6 +6,7 @@ import {
   updateDoc,
   deleteDoc,
   getDocs,
+  getDoc,
   query,
   where,
   orderBy,
@@ -19,40 +20,84 @@ import {
   deleteObject,
 } from 'firebase/storage';
 import { logActivity } from './activityLog';
+import toast from 'react-hot-toast';
+
+const uploadImage = async (file, productId) => {
+  try {
+    // Create a unique filename to prevent collisions
+    const uniqueFileName = `${Date.now()}_${file.name.replace(/[^a-zA-Z0-9.]/g, '_')}`;
+    const storageRef = ref(storage, `products/${productId}/${uniqueFileName}`);
+    const snapshot = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(snapshot.ref);
+    return downloadURL;
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    throw error;
+  }
+};
+
+const ensureImageURLs = async (urls = []) => {
+  try {
+    return await Promise.all(
+      urls.map(async (url) => {
+        if (!url) return null;
+        try {
+          // If URL is already a full URL, return it
+          if (url.startsWith('http')) return url;
+          // Otherwise, try to get the download URL
+          const storageRef = ref(storage, url);
+          return await getDownloadURL(storageRef);
+        } catch (error) {
+          console.error('Error getting image URL:', error);
+          return null;
+        }
+      })
+    ).then(urls => urls.filter(url => url !== null));
+  } catch (error) {
+    console.error('Error ensuring image URLs:', error);
+    return [];
+  }
+};
 
 // Add a new product
-export async function addProduct(productData, images) {
+export async function addProduct(productData, images = []) {
   try {
-    // Upload images first
-    const imageUrls = await Promise.all(
-      images.map(async (image) => {
-        const storageRef = ref(storage, `products/${Date.now()}_${image.name}`);
-        await uploadBytes(storageRef, image);
-        return getDownloadURL(storageRef);
-      })
-    );
-
-    // Add product to Firestore with image URLs
-    const docRef = await addDoc(collection(db, 'products'), {
+    // First create the product document without images
+    const productsRef = collection(db, 'products');
+    const docRef = await addDoc(productsRef, {
       ...productData,
-      images: imageUrls,
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now(),
+      images: [] // Initialize with empty array
     });
+
+    // Then upload images if any
+    const imageUrls = [];
+    if (images && images.length > 0) {
+      for (const image of images) {
+        const imageUrl = await uploadImage(image, docRef.id);
+        if (imageUrl) imageUrls.push(imageUrl);
+      }
+
+      // Update the product with image URLs
+      if (imageUrls.length > 0) {
+        await updateDoc(docRef, { images: imageUrls });
+      }
+    }
 
     await logActivity({
       type: 'product_created',
-      details: `Added product: ${productData.name}`,
+      details: `Created product: ${productData.name}`,
       metadata: {
         productId: docRef.id,
-        productName: productData.name,
-        category: productData.category
+        productName: productData.name
       }
     });
 
     return {
       id: docRef.id,
-      ...productData
+      ...productData,
+      images: imageUrls
     };
   } catch (error) {
     console.error('Error adding product:', error);
@@ -64,36 +109,50 @@ export async function addProduct(productData, images) {
 export async function updateProduct(productId, productData, newImages = []) {
   try {
     const productRef = doc(db, 'products', productId);
+    const productSnap = await getDoc(productRef);
+    
+    if (!productSnap.exists()) {
+      throw new Error('Product not found');
+    }
+
+    // Get existing product data
+    const existingData = productSnap.data();
+    const existingImages = await ensureImageURLs(existingData.images || []);
     
     // Upload new images if any
-    const newImageUrls = await Promise.all(
-      newImages.map(async (image) => {
-        const storageRef = ref(storage, `products/${Date.now()}_${image.name}`);
-        await uploadBytes(storageRef, image);
-        return getDownloadURL(storageRef);
-      })
-    );
+    const newImageUrls = [];
+    if (newImages && newImages.length > 0) {
+      for (const image of newImages) {
+        const imageUrl = await uploadImage(image, productId);
+        if (imageUrl) newImageUrls.push(imageUrl);
+      }
+    }
 
-    // Update product with new data and append new image URLs
-    await updateDoc(productRef, {
+    // Combine existing and new image URLs
+    const updatedImages = [...existingImages, ...newImageUrls];
+
+    // Update the product with all data including images
+    const updateData = {
       ...productData,
-      ...(newImageUrls.length > 0 && {
-        images: [...(productData.images || []), ...newImageUrls],
-      }),
+      images: updatedImages,
       updatedAt: Timestamp.now()
-    });
+    };
+
+    await updateDoc(productRef, updateData);
 
     await logActivity({
       type: 'product_updated',
       details: `Updated product: ${productData.name}`,
       metadata: {
         productId,
-        productName: productData.name,
-        changes: Object.keys(productData)
+        productName: productData.name
       }
     });
 
-    return true;
+    return {
+      id: productId,
+      ...updateData
+    };
   } catch (error) {
     console.error('Error updating product:', error);
     throw error;
@@ -103,8 +162,24 @@ export async function updateProduct(productId, productData, newImages = []) {
 // Delete a product
 export async function deleteProduct(productId, productName) {
   try {
-    // Delete product document
+    // Delete all images from storage first
     const productRef = doc(db, 'products', productId);
+    const productSnapshot = await getDocs(query(collection(db, 'products'), where('id', '==', productId)));
+    const product = productSnapshot.docs[0]?.data();
+    
+    if (product?.images && Array.isArray(product.images)) {
+      for (const imageUrl of product.images) {
+        try {
+          const imageRef = ref(storage, imageUrl);
+          await deleteObject(imageRef);
+        } catch (error) {
+          console.error('Error deleting image:', error);
+          // Continue with other images even if one fails
+        }
+      }
+    }
+
+    // Then delete the product document
     await deleteDoc(productRef);
 
     await logActivity({
@@ -129,36 +204,32 @@ export async function getProducts(filters = {}) {
     const productsRef = collection(db, 'products');
     let q = query(productsRef);
 
+    // Apply filters if any
     if (filters.category) {
       q = query(q, where('category', '==', filters.category));
     }
-
-    if (filters.supplier) {
-      q = query(q, where('supplier', '==', filters.supplier));
+    if (filters.minStock !== undefined) {
+      q = query(q, where('stock', '>=', filters.minStock));
     }
-
-    if (filters.stockStatus) {
-      switch (filters.stockStatus) {
-        case 'low':
-          q = query(q, where('stock', '<=', 'minStockThreshold'));
-          break;
-        case 'out':
-          q = query(q, where('stock', '==', 0));
-          break;
-        case 'available':
-          q = query(q, where('stock', '>', 0));
-          break;
-      }
+    if (filters.maxStock !== undefined) {
+      q = query(q, where('stock', '<=', filters.maxStock));
     }
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-      price: Number(doc.data().price),
-      stock: Number(doc.data().stock),
-      minStockThreshold: Number(doc.data().minStockThreshold || 10)
-    }));
+    const products = await Promise.all(
+      querySnapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        // Ensure all image URLs are valid and accessible
+        const validatedImages = await ensureImageURLs(data.images);
+        return {
+          id: doc.id,
+          ...data,
+          images: validatedImages
+        };
+      })
+    );
+
+    return products;
   } catch (error) {
     console.error('Error fetching products:', error);
     throw error;
@@ -169,16 +240,22 @@ export async function getProducts(filters = {}) {
 export async function getLowStockProducts(threshold = 10) {
   try {
     const productsRef = collection(db, 'products');
-    const q = query(
-      productsRef,
-      where('stock', '<=', threshold)
-    );
-    
+    const q = query(productsRef, where('stock', '<=', threshold));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    
+    const products = await Promise.all(
+      querySnapshot.docs.map(async (doc) => {
+        const data = doc.data();
+        const validatedImages = await ensureImageURLs(data.images);
+        return {
+          id: doc.id,
+          ...data,
+          images: validatedImages
+        };
+      })
+    );
+
+    return products;
   } catch (error) {
     console.error('Error fetching low stock products:', error);
     throw error;
@@ -211,15 +288,32 @@ export async function importProductsFromCSV(csvData) {
 export async function deleteProductImage(productId, imageUrl) {
   try {
     // Delete image from storage
-    const storageRef = ref(storage, imageUrl);
-    await deleteObject(storageRef);
+    const imageRef = ref(storage, imageUrl);
+    await deleteObject(imageRef);
 
-    // Update product document to remove image URL
+    // Update product document to remove the image URL
     const productRef = doc(db, 'products', productId);
-    await updateDoc(productRef, {
-      images: arrayRemove(imageUrl),
-      updatedAt: new Date(),
+    const productSnapshot = await getDocs(query(collection(db, 'products'), where('id', '==', productId)));
+    const product = productSnapshot.docs[0]?.data();
+    
+    if (product?.images) {
+      const updatedImages = product.images.filter(url => url !== imageUrl);
+      await updateDoc(productRef, { 
+        images: updatedImages,
+        updatedAt: Timestamp.now()
+      });
+    }
+
+    await logActivity({
+      type: 'product_image_deleted',
+      details: `Deleted image from product: ${productId}`,
+      metadata: {
+        productId,
+        imageUrl
+      }
     });
+
+    return true;
   } catch (error) {
     console.error('Error deleting product image:', error);
     throw error;
@@ -229,21 +323,28 @@ export async function deleteProductImage(productId, imageUrl) {
 export const updateStock = async (productId, quantity, type = 'add') => {
   try {
     const productRef = doc(db, 'products', productId);
-    const productDoc = await getDocs(productRef);
-    const currentStock = productDoc.data().stock;
+    const productSnapshot = await getDocs(query(collection(db, 'products'), where('id', '==', productId)));
+    const product = productSnapshot.docs[0]?.data();
+    
+    if (!product) {
+      throw new Error('Product not found');
+    }
 
-    const newStock = type === 'add' 
-      ? currentStock + quantity 
-      : currentStock - quantity;
+    const currentStock = product.stock || 0;
+    const newStock = type === 'add' ? currentStock + quantity : currentStock - quantity;
+
+    if (newStock < 0) {
+      throw new Error('Insufficient stock');
+    }
 
     await updateDoc(productRef, {
-      stock: Math.max(0, newStock),
+      stock: newStock,
       updatedAt: Timestamp.now()
     });
 
     await logActivity({
       type: 'stock_updated',
-      details: `${type === 'add' ? 'Added' : 'Removed'} ${quantity} units to product ${productId}`,
+      details: `${type === 'add' ? 'Added' : 'Removed'} ${quantity} units from product: ${product.name}`,
       metadata: {
         productId,
         quantity,
@@ -252,7 +353,7 @@ export const updateStock = async (productId, quantity, type = 'add') => {
       }
     });
 
-    return true;
+    return newStock;
   } catch (error) {
     console.error('Error updating stock:', error);
     throw error;

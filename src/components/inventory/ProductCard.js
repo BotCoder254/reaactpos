@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FiEdit2, FiTrash2, FiImage } from 'react-icons/fi';
 import { useInventory } from '../../contexts/InventoryContext';
@@ -7,6 +7,21 @@ import { formatCurrency } from '../../utils/formatCurrency';
 export default function ProductCard({ product, onEdit, isManager }) {
   const { deleteProduct } = useInventory();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [validImages, setValidImages] = useState([]);
+
+  useEffect(() => {
+    const validateImages = async () => {
+      if (!product.images || !Array.isArray(product.images)) {
+        setValidImages([]);
+        return;
+      }
+
+      const validUrls = product.images.filter(url => url && typeof url === 'string');
+      setValidImages(validUrls);
+    };
+
+    validateImages();
+  }, [product.images]);
 
   const handleDelete = async () => {
     if (window.confirm(`Are you sure you want to delete ${product.name}?`)) {
@@ -15,9 +30,9 @@ export default function ProductCard({ product, onEdit, isManager }) {
   };
 
   const nextImage = () => {
-    if (product.images && product.images.length > 1) {
+    if (validImages.length > 1) {
       setCurrentImageIndex((prev) =>
-        prev === product.images.length - 1 ? 0 : prev + 1
+        prev === validImages.length - 1 ? 0 : prev + 1
       );
     }
   };
@@ -41,15 +56,19 @@ export default function ProductCard({ product, onEdit, isManager }) {
       className="bg-white rounded-lg shadow-sm overflow-hidden"
     >
       <div className="relative">
-        {product.images && product.images.length > 0 ? (
+        {validImages.length > 0 ? (
           <>
             <img
-              src={product.images[currentImageIndex]}
+              src={validImages[currentImageIndex]}
               alt={product.name}
               className="w-full h-48 object-cover cursor-pointer"
               onClick={nextImage}
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
+              }}
             />
-            {product.images.length > 1 && (
+            {validImages.length > 1 && (
               <button
                 onClick={nextImage}
                 className="absolute bottom-2 right-2 p-1 bg-black bg-opacity-50 rounded-full text-white"
