@@ -14,10 +14,13 @@ import {
   FiTag,
   FiTrendingUp,
   FiPause,
+  FiStar
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useHeldTransactions } from '../contexts/HeldTransactionsContext';
+import { useLoyalty } from '../contexts/LoyaltyContext';
 import HeldTransactions from '../components/transactions/HeldTransactions';
+import LoyaltySection from '../components/loyalty/LoyaltySection';
 import { getProducts } from '../utils/inventoryQueries';
 import { createSale, emailReceipt } from '../utils/salesQueries';
 import { searchCustomers, quickSearchCustomers, updateCustomerAfterPurchase } from '../utils/customerQueries';
@@ -30,6 +33,12 @@ import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../utils/dy
 import { getReceiptBranding, generateReceiptHTML } from '../utils/receiptQueries';
 import ChangeCalculator from '../components/transactions/ChangeCalculator';
 import { toast } from 'react-hot-toast';
+
+const TAX_RATE = 0.1; // 10% tax rate
+
+const calculateTax = (subtotal) => {
+  return subtotal * TAX_RATE;
+};
 
 export default function POS() {
   const [products, setProducts] = useState({});
@@ -57,9 +66,11 @@ export default function POS() {
   const [loadingMore, setLoadingMore] = useState(false);
   const ITEMS_PER_PAGE = 12;
   const [receiptBranding, setReceiptBranding] = useState(null);
-  const { holdTransaction, resumeTransaction } = useHeldTransactions();
+  const { holdTransaction, resumeTransaction, heldTransactions } = useHeldTransactions();
   const [isChangeCalculatorOpen, setIsChangeCalculatorOpen] = useState(false);
   const [currentPaymentMethod, setCurrentPaymentMethod] = useState(null);
+  const { loyaltyProgram, addPoints } = useLoyalty();
+  const [loyaltyDiscount, setLoyaltyDiscount] = useState(0);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -120,7 +131,7 @@ export default function POS() {
 
   useEffect(() => {
     if (selectedDiscount) {
-      const amount = calculateDiscount(calculateTotal(), selectedDiscount);
+      const amount = calculateDiscount(calculateTotal().subtotal, selectedDiscount);
       setDiscountAmount(amount);
     } else {
       setDiscountAmount(0);
@@ -179,21 +190,31 @@ export default function POS() {
     fetchReceiptBranding();
   }, []);
 
-  const handleCustomerSearch = async (term) => {
-    setCustomerSearchTerm(term);
-    if (term.trim()) {
-      const results = await quickSearchCustomers(term);
-      setCustomerResults(results);
-    } else {
-      setCustomerResults([]);
-    }
-  };
-
-  const selectCustomer = (customer) => {
+  const handleCustomerSelect = (customer) => {
     setSelectedCustomer(customer);
     setCustomerResults([]);
     setCustomerSearchTerm('');
     setShowCustomerSearch(false);
+  };
+
+  const handleCustomerSearch = async (term) => {
+    setCustomerSearchTerm(term);
+    if (term.trim()) {
+      try {
+        const results = await quickSearchCustomers(term);
+        // Enhance customer results with loyalty information
+        const enhancedResults = results.map(customer => ({
+          ...customer,
+          loyaltyStatus: customer.loyaltyAccount ? 'Member' : 'Non-member'
+        }));
+        setCustomerResults(enhancedResults);
+      } catch (error) {
+        console.error('Error searching customers:', error);
+        setCustomerResults([]);
+      }
+    } else {
+      setCustomerResults([]);
+    }
   };
 
   const loadMoreProducts = () => {
@@ -272,12 +293,18 @@ export default function POS() {
   };
 
   const calculateTotal = () => {
-    return cart.reduce((total, item) => total + item.price * item.quantity, 0);
-  };
-
-  const calculateTax = () => {
-    const subtotal = calculateTotal() - discountAmount;
-    return subtotal * 0.1; // 10% tax
+    const subtotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const discountAmount = selectedDiscount 
+      ? calculateDiscount(subtotal, selectedDiscount)
+      : 0;
+    const totalAfterDiscount = subtotal - discountAmount - loyaltyDiscount;
+    const tax = calculateTax(totalAfterDiscount);
+    return {
+      subtotal,
+      discount: discountAmount + loyaltyDiscount,
+      tax,
+      total: totalAfterDiscount + tax
+    };
   };
 
   const handleDiscountSelect = (discount) => {
@@ -290,22 +317,37 @@ export default function POS() {
 
   const handlePaymentComplete = async (cashReceived, change) => {
     try {
-      setIsChangeCalculatorOpen(false);
+      const totals = calculateTotal();
       
+      // Create the sale record
       const saleData = {
         items: cart,
-        subtotal: calculateTotal(),
-        tax: calculateTax(),
-        total: calculateTotal(),
-        cashReceived: cashReceived,
-        change: change,
-        paymentMethod: currentPaymentMethod,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        tax: totals.tax,
+        total: totals.total,
+        cashReceived,
+        change,
+        paymentMethod: 'cash',
         cashierId: currentUser.uid,
         cashierName: currentUser.displayName || currentUser.email,
         timestamp: new Date(),
-        customerName: selectedCustomer?.name,
-        customerId: selectedCustomer?.id
+        customer: selectedCustomer || null,
+        discountApplied: selectedDiscount ? {
+          id: selectedDiscount.id,
+          name: selectedDiscount.name,
+          value: totals.discount
+        } : null
       };
+
+      // If there's a loyalty account and points to be earned
+      if (selectedCustomer?.loyaltyAccount && loyaltyProgram) {
+        const pointsToEarn = Math.floor(totals.total * (loyaltyProgram.pointsPerDollar || 1));
+        if (pointsToEarn > 0) {
+          await addPoints(selectedCustomer.loyaltyAccount.id, pointsToEarn, totals.total);
+          saleData.loyaltyPoints = pointsToEarn;
+        }
+      }
 
       // Create the sale
       await createSale(saleData);
@@ -315,6 +357,7 @@ export default function POS() {
       setSelectedCustomer(null);
       setDiscountAmount(0);
       setTaxAmount(0);
+      setLoyaltyDiscount(0);
 
       // Show success message
       toast.success('Sale completed successfully!');
@@ -329,7 +372,7 @@ export default function POS() {
     if (paymentMethod === 'cash') {
       setIsChangeCalculatorOpen(true);
     } else {
-      handlePaymentComplete(calculateTotal(), 0);
+      handlePaymentComplete(calculateTotal().total, 0);
     }
   };
 
@@ -337,11 +380,11 @@ export default function POS() {
     try {
       const saleData = {
         items: cart,
-        subtotal: calculateTotal(),
-        discount: discountAmount,
+        subtotal: calculateTotal().subtotal,
+        discount: calculateTotal().discount,
         discountName: selectedDiscount?.name,
-        tax: calculateTax(),
-        total: calculateTotal() - discountAmount + calculateTax(),
+        tax: calculateTax(calculateTotal().subtotal),
+        total: calculateTotal().total,
         email,
         customerName: selectedCustomer?.name,
         cashierName: currentUser.email,
@@ -369,11 +412,11 @@ export default function POS() {
 
     const saleData = {
       items: cart,
-      subtotal: calculateTotal(),
-      discount: discountAmount,
+      subtotal: calculateTotal().subtotal,
+      discount: calculateTotal().discount,
       discountName: selectedDiscount?.name,
-      tax: calculateTax(),
-      total: calculateTotal() - discountAmount + calculateTax(),
+      tax: calculateTax(calculateTotal().subtotal),
+      total: calculateTotal().total,
       customerName: selectedCustomer?.name,
       cashierName: currentUser.email,
       timestamp: new Date(),
@@ -392,7 +435,7 @@ export default function POS() {
     
     const transaction = {
       items: cart,
-      total: calculateTotal(),
+      total: calculateTotal().total,
       customer: selectedCustomer,
       timestamp: new Date().toISOString()
     };
@@ -414,6 +457,7 @@ export default function POS() {
     setSelectedCustomer(null);
     setDiscountAmount(0);
     setTaxAmount(0);
+    setLoyaltyDiscount(0);
   };
 
   const handleResumeTransaction = (transactionId) => {
@@ -436,6 +480,10 @@ export default function POS() {
       setSelectedCustomer(transaction.customer);
     }
     calculateTotal();
+  };
+
+  const handleLoyaltyDiscount = (amount) => {
+    setLoyaltyDiscount(amount);
   };
 
   const renderProduct = (product) => (
@@ -600,12 +648,21 @@ export default function POS() {
                     </span>
                   </div>
                   <div className="ml-2">
-                    <p className="text-sm font-medium">{selectedCustomer.name}</p>
+                    <p className="text-sm font-medium text-gray-900">{selectedCustomer.name}</p>
                     <p className="text-xs text-gray-500">{selectedCustomer.phone}</p>
+                    {selectedCustomer.loyaltyAccount && (
+                      <p className="text-xs text-primary-600">
+                        <FiStar className="inline-block w-3 h-3 mr-1" />
+                        {selectedCustomer.loyaltyAccount.points.toLocaleString()} points
+                      </p>
+                    )}
                   </div>
                 </div>
                 <button
-                  onClick={() => setSelectedCustomer(null)}
+                  onClick={() => {
+                    setSelectedCustomer(null);
+                    setLoyaltyDiscount(0);
+                  }}
                   className="text-gray-400 hover:text-gray-500"
                 >
                   <FiX className="w-4 h-4" />
@@ -637,10 +694,7 @@ export default function POS() {
                       <input
                         type="text"
                         value={customerSearchTerm}
-                        onChange={(e) => {
-                          setCustomerSearchTerm(e.target.value);
-                          handleCustomerSearch(e.target.value);
-                        }}
+                        onChange={(e) => handleCustomerSearch(e.target.value)}
                         className="w-full px-3 py-2 border border-gray-300 rounded-md"
                         placeholder="Search customers..."
                         autoFocus
@@ -652,18 +706,28 @@ export default function POS() {
                           <li
                             key={customer.id}
                             className="p-2 hover:bg-gray-50 cursor-pointer"
-                            onClick={() => selectCustomer(customer)}
+                            onClick={() => handleCustomerSelect(customer)}
                           >
-                            <div className="flex items-center">
-                              <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
-                                <span className="text-primary-600 font-medium">
-                                  {customer.name[0].toUpperCase()}
-                                </span>
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+                                  <span className="text-primary-600 font-medium">
+                                    {customer.name[0].toUpperCase()}
+                                  </span>
+                                </div>
+                                <div className="ml-2">
+                                  <p className="text-sm font-medium text-gray-900">{customer.name}</p>
+                                  <p className="text-xs text-gray-500">{customer.phone}</p>
+                                </div>
                               </div>
-                              <div className="ml-2">
-                                <p className="text-sm font-medium">{customer.name}</p>
-                                <p className="text-xs text-gray-500">{customer.phone}</p>
-                              </div>
+                              {customer.loyaltyAccount && (
+                                <div className="flex items-center text-primary-600">
+                                  <FiStar className="w-4 h-4 mr-1" />
+                                  <span className="text-xs font-medium">
+                                    {customer.loyaltyAccount.points.toLocaleString()} pts
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           </li>
                         ))}
@@ -763,7 +827,7 @@ export default function POS() {
           <div className="space-y-2 mb-4">
             <div className="flex justify-between">
               <span>Subtotal</span>
-              <span>${calculateTotal().toFixed(2)}</span>
+              <span>${calculateTotal().subtotal.toFixed(2)}</span>
             </div>
             {discountAmount > 0 && (
               <div className="flex justify-between text-primary-600">
@@ -773,11 +837,11 @@ export default function POS() {
             )}
             <div className="flex justify-between">
               <span>Tax (10%)</span>
-              <span>${calculateTax().toFixed(2)}</span>
+              <span>${calculateTax(calculateTotal().subtotal).toFixed(2)}</span>
             </div>
             <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span>${(calculateTotal() - discountAmount + calculateTax()).toFixed(2)}</span>
+              <span>${calculateTotal().total.toFixed(2)}</span>
             </div>
           </div>
 
@@ -825,12 +889,42 @@ export default function POS() {
             </button>
           </div>
         </div>
+
+        {/* Customer and Loyalty Section */}
+        {selectedCustomer && (
+          <div className="mb-4 p-4 bg-gray-50 rounded-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center">
+                <FiUser className="h-5 w-5 text-gray-400" />
+                <span className="ml-2 text-sm font-medium text-gray-900">
+                  {selectedCustomer.name}
+                </span>
+              </div>
+              <button
+                onClick={() => setSelectedCustomer(null)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <FiX className="h-5 w-5" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Loyalty Section */}
+        {selectedCustomer && (
+          <div className="mt-4">
+            <LoyaltySection
+              total={calculateTotal().total}
+              onApplyDiscount={handleLoyaltyDiscount}
+            />
+          </div>
+        )}
       </div>
 
       <ChangeCalculator
         isOpen={isChangeCalculatorOpen}
         onClose={() => setIsChangeCalculatorOpen(false)}
-        totalAmount={calculateTotal()}
+        totalAmount={calculateTotal().total}
         onComplete={handlePaymentComplete}
       />
 

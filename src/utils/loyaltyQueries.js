@@ -1,5 +1,5 @@
 import { db } from '../firebase';
-import { collection, addDoc, updateDoc, getDoc, getDocs, query, where, doc, orderBy, Timestamp } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, getDoc, getDocs, query, where, doc, orderBy, Timestamp, setDoc } from 'firebase/firestore';
 import { logActivity } from './activityLog';
 
 export const createLoyaltyProgram = async (programData) => {
@@ -242,6 +242,34 @@ export const getLoyaltyAnalytics = async () => {
     };
   } catch (error) {
     console.error('Error getting loyalty analytics:', error);
+    throw error;
+  }
+};
+
+export const getLoyaltyProgram = async () => {
+  try {
+    const programRef = doc(db, 'loyaltyProgram', 'default');
+    const docSnap = await getDoc(programRef);
+
+    if (docSnap.exists()) {
+      return docSnap.data();
+    } else {
+      // Create default program if it doesn't exist
+      const defaultProgram = {
+        name: 'Default Loyalty Program',
+        pointsPerDollar: 1,
+        minimumPurchase: 0,
+        rewards: [
+          { points: 100, name: '$5 off purchase', value: 5 },
+          { points: 200, name: '$10 off purchase', value: 10 },
+          { points: 500, name: '$25 off purchase', value: 25 }
+        ]
+      };
+      await setDoc(programRef, defaultProgram);
+      return defaultProgram;
+    }
+  } catch (error) {
+    console.error('Error getting loyalty program:', error);
     throw error;
   }
 }; 

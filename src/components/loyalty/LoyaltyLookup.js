@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { FiSearch, FiUser, FiStar, FiGift, FiPlus } from 'react-icons/fi';
+import { motion } from 'framer-motion';
+import { FiSearch, FiUser, FiUserPlus } from 'react-icons/fi';
 import { useLoyalty } from '../../contexts/LoyaltyContext';
 
 export default function LoyaltyLookup({ onSelect }) {
-  const { lookupAccount, createAccount, currentAccount, loyaltyProgram } = useLoyalty();
+  const { lookupAccount, createAccount } = useLoyalty();
   const [phone, setPhone] = useState('');
   const [showNewAccount, setShowNewAccount] = useState(false);
   const [newAccount, setNewAccount] = useState({
@@ -13,31 +13,47 @@ export default function LoyaltyLookup({ onSelect }) {
     email: ''
   });
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const handleLookup = async (e) => {
     e.preventDefault();
+    if (!phone) return;
+
     try {
       setError('');
-      const account = await lookupAccount(phone);
-      if (!account) {
+      setLoading(true);
+      const account = await lookupAccount(formatPhone(phone));
+      if (account) {
+        onSelect(account);
+      } else {
         setShowNewAccount(true);
-        setNewAccount(prev => ({ ...prev, phone }));
+        setNewAccount(prev => ({ ...prev, phone: formatPhone(phone) }));
       }
     } catch (err) {
-      setError('Error looking up account');
+      setError('Failed to find account. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleCreateAccount = async (e) => {
     e.preventDefault();
+    if (!newAccount.name || !newAccount.phone) {
+      setError('Name and phone number are required.');
+      return;
+    }
+
     try {
       setError('');
-      await createAccount(newAccount);
-      await lookupAccount(newAccount.phone);
+      setLoading(true);
+      const account = await createAccount(newAccount);
+      onSelect(account);
       setShowNewAccount(false);
       setNewAccount({ name: '', phone: '', email: '' });
     } catch (err) {
-      setError('Error creating account');
+      setError('Failed to create account. Please try again.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -49,154 +65,116 @@ export default function LoyaltyLookup({ onSelect }) {
   };
 
   const handlePhoneChange = (e) => {
-    const formatted = formatPhone(e.target.value);
-    setPhone(formatted);
+    const formattedPhone = formatPhone(e.target.value);
+    setPhone(formattedPhone);
+    setError('');
   };
 
   return (
     <div className="space-y-4">
-      <form onSubmit={handleLookup} className="flex space-x-2">
-        <div className="flex-1">
-          <label className="sr-only">Phone Number</label>
-          <div className="relative">
-            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-              <FiSearch className="h-5 w-5 text-gray-400" />
+      {!showNewAccount ? (
+        <form onSubmit={handleLookup} className="space-y-4">
+          <div>
+            <label htmlFor="phone" className="block text-sm font-medium text-gray-700">
+              Phone Number
+            </label>
+            <div className="mt-1 relative rounded-md shadow-sm">
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <FiUser className="h-5 w-5 text-gray-400" />
+              </div>
+              <input
+                type="text"
+                id="phone"
+                value={phone}
+                onChange={handlePhoneChange}
+                className="focus:ring-primary-500 focus:border-primary-500 block w-full pl-10 sm:text-sm border-gray-300 rounded-md"
+                placeholder="(555) 555-5555"
+              />
             </div>
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600">{error}</p>
+          )}
+
+          <div className="flex space-x-3">
+            <button
+              type="submit"
+              disabled={loading || !phone}
+              className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            >
+              {loading ? 'Searching...' : 'Look Up Account'}
+            </button>
+          </div>
+        </form>
+      ) : (
+        <motion.form
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          onSubmit={handleCreateAccount}
+          className="space-y-4"
+        >
+          <div>
+            <label htmlFor="name" className="block text-sm font-medium text-gray-700">
+              Full Name
+            </label>
             <input
               type="text"
-              value={phone}
-              onChange={handlePhoneChange}
-              placeholder="Enter phone number"
-              className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+              id="name"
+              value={newAccount.name}
+              onChange={(e) => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
+              className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
             />
           </div>
-        </div>
-        <button
-          type="submit"
-          className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-        >
-          Lookup
-        </button>
-      </form>
 
-      {error && (
-        <div className="bg-red-50 border-l-4 border-red-400 p-4">
-          <div className="flex">
-            <div className="flex-shrink-0">
-              <FiStar className="h-5 w-5 text-red-400" />
-            </div>
-            <div className="ml-3">
-              <p className="text-sm text-red-700">{error}</p>
-            </div>
+          <div>
+            <label htmlFor="newPhone" className="block text-sm font-medium text-gray-700">
+              Phone Number
+            </label>
+            <input
+              type="text"
+              id="newPhone"
+              value={newAccount.phone}
+              onChange={(e) => setNewAccount(prev => ({ ...prev, phone: formatPhone(e.target.value) }))}
+              className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+            />
           </div>
-        </div>
+
+          <div>
+            <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+              Email (Optional)
+            </label>
+            <input
+              type="email"
+              id="email"
+              value={newAccount.email}
+              onChange={(e) => setNewAccount(prev => ({ ...prev, email: e.target.value }))}
+              className="mt-1 focus:ring-primary-500 focus:border-primary-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600">{error}</p>
+          )}
+
+          <div className="flex space-x-3">
+            <button
+              type="button"
+              onClick={() => setShowNewAccount(false)}
+              className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={loading || !newAccount.name || !newAccount.phone}
+              className="flex-1 inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
+            >
+              {loading ? 'Creating...' : 'Create Account'}
+            </button>
+          </div>
+        </motion.form>
       )}
-
-      <AnimatePresence>
-        {currentAccount && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <div className="p-2 bg-primary-100 rounded-full">
-                  <FiUser className="h-5 w-5 text-primary-600" />
-                </div>
-                <div className="ml-3">
-                  <p className="text-sm font-medium text-gray-900">{currentAccount.name}</p>
-                  <p className="text-sm text-gray-500">{currentAccount.phone}</p>
-                </div>
-              </div>
-              <div className="flex items-center space-x-4">
-                <div className="text-right">
-                  <p className="text-sm text-gray-500">Available Points</p>
-                  <p className="text-lg font-semibold text-primary-600">
-                    {currentAccount.points.toLocaleString()}
-                  </p>
-                </div>
-                {loyaltyProgram?.rewards && (
-                  <button
-                    onClick={() => onSelect(currentAccount)}
-                    className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-                  >
-                    <FiGift className="h-4 w-4 mr-1" />
-                    Redeem
-                  </button>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-
-        {showNewAccount && (
-          <motion.div
-            initial={{ opacity: 0, y: -20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="bg-white p-4 rounded-lg shadow-sm border border-gray-200"
-          >
-            <div className="flex items-center mb-4">
-              <FiPlus className="h-5 w-5 text-primary-600 mr-2" />
-              <h3 className="text-lg font-medium text-gray-900">Create New Account</h3>
-            </div>
-            <form onSubmit={handleCreateAccount} className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Name
-                </label>
-                <input
-                  type="text"
-                  value={newAccount.name}
-                  onChange={(e) => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Phone
-                </label>
-                <input
-                  type="text"
-                  value={newAccount.phone}
-                  onChange={(e) => setNewAccount(prev => ({ ...prev, phone: formatPhone(e.target.value) }))}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Email
-                </label>
-                <input
-                  type="email"
-                  value={newAccount.email}
-                  onChange={(e) => setNewAccount(prev => ({ ...prev, email: e.target.value }))}
-                  className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                />
-              </div>
-              <div className="flex justify-end space-x-3">
-                <button
-                  type="button"
-                  onClick={() => setShowNewAccount(false)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-primary-600 text-white rounded-md text-sm font-medium hover:bg-primary-700"
-                >
-                  Create Account
-                </button>
-              </div>
-            </form>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </div>
   );
-} 
+}

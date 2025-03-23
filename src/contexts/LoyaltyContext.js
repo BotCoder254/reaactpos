@@ -7,7 +7,8 @@ import {
   getLoyaltyAccount,
   updateLoyaltyPoints,
   redeemPoints,
-  getLoyaltyAnalytics
+  getLoyaltyAnalytics,
+  getLoyaltyProgram
 } from '../utils/loyaltyQueries';
 
 const LoyaltyContext = createContext();

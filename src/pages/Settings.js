@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { FiDollarSign, FiPrinter, FiSettings } from 'react-icons/fi';
+import { FiDollarSign, FiPrinter, FiSettings, FiStar } from 'react-icons/fi';
 import DynamicPricingManager from '../components/pricing/DynamicPricingManager';
 import ReceiptBrandingManager from '../components/settings/ReceiptBrandingManager';
+import LoyaltyProgramSettings from '../components/loyalty/LoyaltyProgramSettings';
 import { useAuth } from '../contexts/AuthContext';
 
 const Settings = () => {
@@ -22,6 +23,13 @@ const Settings = () => {
       name: 'Receipt Branding',
       icon: FiPrinter,
       component: ReceiptBrandingManager,
+      allowedRoles: ['manager']
+    },
+    {
+      id: 'loyalty',
+      name: 'Loyalty Program',
+      icon: FiStar,
+      component: LoyaltyProgramSettings,
       allowedRoles: ['manager']
     },
     {
