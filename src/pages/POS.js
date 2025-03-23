@@ -401,6 +401,18 @@ export default function POS() {
     };
     
     holdTransaction(transaction);
+
+    // Reset inCart state for all products in cart
+    setProducts(prev => {
+      const updated = { ...prev };
+      cart.forEach(item => {
+        if (updated[item.id]) {
+          updated[item.id] = { ...updated[item.id], inCart: false };
+        }
+      });
+      return updated;
+    });
+    
     setCart([]);
     setSelectedCustomer(null);
     setDiscountAmount(0);
@@ -410,6 +422,17 @@ export default function POS() {
   const handleResumeTransaction = (transactionId) => {
     const transaction = resumeTransaction(transactionId);
     if (!transaction) return;
+    
+    // Update inCart state for resumed products
+    setProducts(prev => {
+      const updated = { ...prev };
+      transaction.items.forEach(item => {
+        if (updated[item.id]) {
+          updated[item.id] = { ...updated[item.id], inCart: true };
+        }
+      });
+      return updated;
+    });
     
     setCart(transaction.items);
     if (transaction.customer) {
