@@ -41,6 +41,7 @@ export default function Sidebar() {
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Discounts', icon: TagIcon, path: '/discounts' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
+    { name: 'Expenses', icon: ChartBarIcon, path: '/expenses' },
     { name: 'Reports', icon: DocumentTextIcon, path: '/reports' },
     { name: 'Settings', icon: CogIcon, path: '/settings' }
   ];

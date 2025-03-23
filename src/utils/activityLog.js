@@ -1,22 +1,23 @@
-import { collection, addDoc } from 'firebase/firestore';
+import { collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import { auth } from '../firebase';
 
 export const logActivity = async (activity) => {
   try {
+    const activitiesRef = collection(db, 'activities');
     const currentUser = auth.currentUser;
-    const activityData = {
-      ...activity,
-      userId: currentUser ? currentUser.uid : null,
-      userEmail: currentUser ? currentUser.email : null,
-      timestamp: new Date(),
-    };
 
-    const activityRef = collection(db, 'activity_logs');
-    await addDoc(activityRef, activityData);
+    await addDoc(activitiesRef, {
+      ...activity,
+      userId: currentUser?.uid,
+      userEmail: currentUser?.email,
+      timestamp: Timestamp.now()
+    });
+
+    return true;
   } catch (error) {
     console.error('Error logging activity:', error);
-    // Don't throw error here as logging failure shouldn't break the main flow
+    return false;
   }
 };
 

@@ -23,6 +23,8 @@ import EmployeeStats from './pages/EmployeeStats';
 import StaffStats from './pages/StaffStats';
 import SalesGoals from './pages/SalesGoals';
 import Marketing from './pages/Marketing';
+import ExpenseManager from './pages/ExpenseManager';
+import ProfitLossStatement from './components/analytics/ProfitLossStatement';
 
 function AppContent() {
   const location = useLocation();
@@ -54,6 +56,8 @@ function AppContent() {
               <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
               <Route path="/employee-stats" element={<PrivateRoute><EmployeeStats /></PrivateRoute>} />
               <Route path="/marketing" element={<PrivateRoute><Marketing /></PrivateRoute>} />
+              <Route path="/expenses" element={<PrivateRoute><ExpenseManager /></PrivateRoute>} />
+              <Route path="/profit-loss" element={<PrivateRoute><ProfitLossStatement /></PrivateRoute>} />
               <Route path="/checkout" element={<Checkout />} />
             </Routes>
           </div>

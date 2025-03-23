@@ -111,3 +111,83 @@ export async function emailReceipt(saleData, email) {
     throw error;
   }
 }
+
+export const getSalesAnalytics = async (period = 'month') => {
+  try {
+    const now = new Date();
+    let startDate;
+
+    switch (period) {
+      case 'week':
+        startDate = new Date(now.setDate(now.getDate() - 7));
+        break;
+      case 'month':
+        startDate = new Date(now.setMonth(now.getMonth() - 1));
+        break;
+      case 'year':
+        startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+        break;
+      default:
+        startDate = new Date(now.setMonth(now.getMonth() - 1));
+    }
+
+    const salesRef = collection(db, 'sales');
+    const q = query(
+      salesRef,
+      where('timestamp', '>=', Timestamp.fromDate(startDate)),
+      where('timestamp', '<=', Timestamp.fromDate(new Date())),
+      orderBy('timestamp', 'desc')
+    );
+
+    const querySnapshot = await getDocs(q);
+    const sales = querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
+
+    // Calculate total sales
+    const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
+
+    // Calculate daily sales
+    const dailySales = sales.reduce((acc, sale) => {
+      const date = sale.timestamp.toDate().toISOString().split('T')[0];
+      if (!acc[date]) {
+        acc[date] = 0;
+      }
+      acc[date] += sale.total;
+      return acc;
+    }, {});
+
+    // Calculate sales by category
+    const salesByCategory = sales.reduce((acc, sale) => {
+      sale.items.forEach(item => {
+        if (!acc[item.category]) {
+          acc[item.category] = 0;
+        }
+        acc[item.category] += item.price * item.quantity;
+      });
+      return acc;
+    }, {});
+
+    // Convert to arrays for charts
+    const dailyData = Object.entries(dailySales).map(([date, amount]) => ({
+      date,
+      amount
+    }));
+
+    const categoryData = Object.entries(salesByCategory).map(([category, amount]) => ({
+      category,
+      amount
+    }));
+
+    return {
+      totalSales,
+      dailySales: dailyData,
+      salesByCategory: categoryData,
+      saleCount: sales.length
+    };
+  } catch (error) {
+    console.error('Error getting sales analytics:', error);
+    throw error;
+  }
+};
