@@ -9,7 +9,8 @@ import {
   query,
   where,
   orderBy,
-  arrayRemove
+  arrayRemove,
+  Timestamp
 } from 'firebase/firestore';
 import {
   ref,
@@ -17,6 +18,7 @@ import {
   getDownloadURL,
   deleteObject,
 } from 'firebase/storage';
+import { logActivity } from './activityLog';
 
 // Add a new product
 export async function addProduct(productData, images) {
@@ -34,11 +36,24 @@ export async function addProduct(productData, images) {
     const docRef = await addDoc(collection(db, 'products'), {
       ...productData,
       images: imageUrls,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      createdAt: Timestamp.now(),
+      updatedAt: Timestamp.now(),
     });
 
-    return docRef.id;
+    await logActivity({
+      type: 'product_created',
+      details: `Added product: ${productData.name}`,
+      metadata: {
+        productId: docRef.id,
+        productName: productData.name,
+        category: productData.category
+      }
+    });
+
+    return {
+      id: docRef.id,
+      ...productData
+    };
   } catch (error) {
     console.error('Error adding product:', error);
     throw error;
@@ -65,8 +80,20 @@ export async function updateProduct(productId, productData, newImages = []) {
       ...(newImageUrls.length > 0 && {
         images: [...(productData.images || []), ...newImageUrls],
       }),
-      updatedAt: new Date(),
+      updatedAt: Timestamp.now()
     });
+
+    await logActivity({
+      type: 'product_updated',
+      details: `Updated product: ${productData.name}`,
+      metadata: {
+        productId,
+        productName: productData.name,
+        changes: Object.keys(productData)
+      }
+    });
+
+    return true;
   } catch (error) {
     console.error('Error updating product:', error);
     throw error;
@@ -74,22 +101,22 @@ export async function updateProduct(productId, productData, newImages = []) {
 }
 
 // Delete a product
-export async function deleteProduct(productId, imageUrls = []) {
+export async function deleteProduct(productId, productName) {
   try {
-    // Delete images from storage
-    await Promise.all(
-      imageUrls.map(async (url) => {
-        const storageRef = ref(storage, url);
-        try {
-          await deleteObject(storageRef);
-        } catch (error) {
-          console.error('Error deleting image:', error);
-        }
-      })
-    );
-
     // Delete product document
-    await deleteDoc(doc(db, 'products', productId));
+    const productRef = doc(db, 'products', productId);
+    await deleteDoc(productRef);
+
+    await logActivity({
+      type: 'product_deleted',
+      details: `Deleted product: ${productName}`,
+      metadata: {
+        productId,
+        productName
+      }
+    });
+
+    return true;
   } catch (error) {
     console.error('Error deleting product:', error);
     throw error;
@@ -97,19 +124,43 @@ export async function deleteProduct(productId, imageUrls = []) {
 }
 
 // Get all products
-export async function getProducts() {
+export async function getProducts(filters = {}) {
   try {
-    const q = query(
-      collection(db, 'products'),
-      orderBy('createdAt', 'desc')
-    );
+    const productsRef = collection(db, 'products');
+    let q = query(productsRef);
+
+    if (filters.category) {
+      q = query(q, where('category', '==', filters.category));
+    }
+
+    if (filters.supplier) {
+      q = query(q, where('supplier', '==', filters.supplier));
+    }
+
+    if (filters.stockStatus) {
+      switch (filters.stockStatus) {
+        case 'low':
+          q = query(q, where('stock', '<=', 'minStockThreshold'));
+          break;
+        case 'out':
+          q = query(q, where('stock', '==', 0));
+          break;
+        case 'available':
+          q = query(q, where('stock', '>', 0));
+          break;
+      }
+    }
+
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
-      ...doc.data()
+      ...doc.data(),
+      price: Number(doc.data().price),
+      stock: Number(doc.data().stock),
+      minStockThreshold: Number(doc.data().minStockThreshold || 10)
     }));
   } catch (error) {
-    console.error('Error getting products:', error);
+    console.error('Error fetching products:', error);
     throw error;
   }
 }
@@ -117,18 +168,19 @@ export async function getProducts() {
 // Get low stock products
 export async function getLowStockProducts(threshold = 10) {
   try {
+    const productsRef = collection(db, 'products');
     const q = query(
-      collection(db, 'products'),
-      where('stock', '<=', threshold),
-      orderBy('stock', 'asc')
+      productsRef,
+      where('stock', '<=', threshold)
     );
+    
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
     }));
   } catch (error) {
-    console.error('Error getting low stock products:', error);
+    console.error('Error fetching low stock products:', error);
     throw error;
   }
 }
@@ -173,3 +225,58 @@ export async function deleteProductImage(productId, imageUrl) {
     throw error;
   }
 }
+
+export const updateStock = async (productId, quantity, type = 'add') => {
+  try {
+    const productRef = doc(db, 'products', productId);
+    const productDoc = await getDocs(productRef);
+    const currentStock = productDoc.data().stock;
+
+    const newStock = type === 'add' 
+      ? currentStock + quantity 
+      : currentStock - quantity;
+
+    await updateDoc(productRef, {
+      stock: Math.max(0, newStock),
+      updatedAt: Timestamp.now()
+    });
+
+    await logActivity({
+      type: 'stock_updated',
+      details: `${type === 'add' ? 'Added' : 'Removed'} ${quantity} units to product ${productId}`,
+      metadata: {
+        productId,
+        quantity,
+        type,
+        newStock
+      }
+    });
+
+    return true;
+  } catch (error) {
+    console.error('Error updating stock:', error);
+    throw error;
+  }
+};
+
+export const getAlternativeProducts = async (productId, category) => {
+  try {
+    const productsRef = collection(db, 'products');
+    const q = query(
+      productsRef,
+      where('category', '==', category),
+      where('stock', '>', 0)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs
+      .map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }))
+      .filter(product => product.id !== productId);
+  } catch (error) {
+    console.error('Error fetching alternative products:', error);
+    throw error;
+  }
+};

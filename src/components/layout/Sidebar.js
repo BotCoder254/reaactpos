@@ -16,6 +16,9 @@ import {
   ChartPieIcon,
   FlagIcon,
   PhotoIcon,
+  ArchiveBoxIcon,
+  InboxStackIcon,
+  ExclamationCircleIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar } from 'react-icons/fi';
@@ -32,6 +35,9 @@ export default function Sidebar() {
     { name: 'Dashboard', icon: HomeIcon, path: '/' },
     { name: 'POS', icon: ShoppingCartIcon, path: '/pos' },
     { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
+    { name: 'Inventory', icon: ArchiveBoxIcon, path: '/inventory' },
+    { name: 'Stock Management', icon: InboxStackIcon, path: '/inventory/stock' },
+    { name: 'Low Stock Alerts', icon: ExclamationCircleIcon, path: '/inventory/alerts' },
     { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },
@@ -54,6 +60,7 @@ export default function Sidebar() {
     { name: 'Dashboard', icon: HomeIcon, path: '/' },
     { name: 'POS', icon: ShoppingCartIcon, path: '/pos' },
     { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
+    { name: 'Inventory', icon: ArchiveBoxIcon, path: '/inventory' },
     { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },

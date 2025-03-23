@@ -13,6 +13,7 @@ import { SalesGoalsProvider } from './contexts/SalesGoalsContext';
 import { HeldTransactionsProvider } from './contexts/HeldTransactionsContext';
 import { RefundProvider } from './contexts/RefundContext';
 import { LoyaltyProvider } from './contexts/LoyaltyContext';
+import { InventoryProvider } from './contexts/InventoryContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -31,9 +32,13 @@ import ProfitLossStatement from './components/analytics/ProfitLossStatement';
 import RefundManager from './components/refunds/RefundManager';
 import RefundRequest from './components/refunds/RefundRequest';
 import LoyaltyDashboard from './components/loyalty/LoyaltyDashboard';
+import Inventory from './pages/Inventory';
+import StockManagement from './pages/StockManagement';
+import LowStockAlerts from './pages/LowStockAlerts';
 
 function AppContent() {
   const location = useLocation();
+  const { userRole } = useAuth();
   const isAuthPage = ['/login', '/signup'].includes(location.pathname);
 
   return (
@@ -50,6 +55,13 @@ function AppContent() {
               <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
               <Route path="/pos" element={<PrivateRoute><POS /></PrivateRoute>} />
               <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
+              <Route path="/inventory" element={<PrivateRoute><Inventory /></PrivateRoute>} />
+              {userRole === 'manager' && (
+                <>
+                  <Route path="/inventory/stock" element={<PrivateRoute><StockManagement /></PrivateRoute>} />
+                  <Route path="/inventory/alerts" element={<PrivateRoute><LowStockAlerts /></PrivateRoute>} />
+                </>
+              )}
               <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
               <Route path="/sales" element={<PrivateRoute><Sales /></PrivateRoute>} />
               <Route path="/sales-goals" element={<PrivateRoute><SalesGoals /></PrivateRoute>} />
@@ -97,7 +109,9 @@ function App() {
           <HeldTransactionsProvider>
             <RefundProvider>
               <LoyaltyProvider>
-                <AppContent />
+                <InventoryProvider>
+                  <AppContent />
+                </InventoryProvider>
               </LoyaltyProvider>
             </RefundProvider>
           </HeldTransactionsProvider>

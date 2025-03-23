@@ -1,31 +1,37 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
 import { FiEdit2, FiTrash2, FiImage } from 'react-icons/fi';
-import { deleteProduct } from '../../utils/inventoryQueries';
+import { useInventory } from '../../contexts/InventoryContext';
+import { formatCurrency } from '../../utils/formatCurrency';
 
-export default function ProductCard({ product, onEdit, onRefetch }) {
-  const [isDeleting, setIsDeleting] = useState(false);
+export default function ProductCard({ product, onEdit, isManager }) {
+  const { deleteProduct } = useInventory();
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   const handleDelete = async () => {
-    if (window.confirm('Are you sure you want to delete this product?')) {
-      try {
-        setIsDeleting(true);
-        await deleteProduct(product.id, product.images);
-        onRefetch();
-      } catch (error) {
-        console.error('Error deleting product:', error);
-        alert('Failed to delete product');
-      } finally {
-        setIsDeleting(false);
-      }
+    if (window.confirm(`Are you sure you want to delete ${product.name}?`)) {
+      await deleteProduct(product.id, product.name);
     }
   };
 
   const nextImage = () => {
-    setCurrentImageIndex((prev) =>
-      prev === product.images.length - 1 ? 0 : prev + 1
-    );
+    if (product.images && product.images.length > 1) {
+      setCurrentImageIndex((prev) =>
+        prev === product.images.length - 1 ? 0 : prev + 1
+      );
+    }
+  };
+
+  const getStockStatusColor = () => {
+    if (product.stock === 0) return 'bg-red-100 text-red-800';
+    if (product.stock <= product.minStockThreshold) return 'bg-yellow-100 text-yellow-800';
+    return 'bg-green-100 text-green-800';
+  };
+
+  const getStockStatusText = () => {
+    if (product.stock === 0) return 'Out of Stock';
+    if (product.stock <= product.minStockThreshold) return 'Low Stock';
+    return 'In Stock';
   };
 
   return (
@@ -40,7 +46,7 @@ export default function ProductCard({ product, onEdit, onRefetch }) {
             <img
               src={product.images[currentImageIndex]}
               alt={product.name}
-              className="w-full h-48 object-cover"
+              className="w-full h-48 object-cover cursor-pointer"
               onClick={nextImage}
             />
             {product.images.length > 1 && (
@@ -57,46 +63,43 @@ export default function ProductCard({ product, onEdit, onRefetch }) {
             <FiImage className="w-8 h-8 text-gray-400" />
           </div>
         )}
-        {product.stock <= 10 && (
-          <div className="absolute top-2 right-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
-            Low Stock
-          </div>
-        )}
+        <span
+          className={`absolute top-2 right-2 px-2 py-1 rounded-full text-xs font-medium ${getStockStatusColor()}`}
+        >
+          {getStockStatusText()}
+        </span>
       </div>
 
       <div className="p-4">
-        <h3 className="text-lg font-semibold text-gray-900 mb-1">
-          {product.name}
-        </h3>
-        <p className="text-sm text-gray-500 mb-2">{product.category}</p>
-        <div className="flex justify-between items-center mb-2">
-          <span className="text-lg font-bold text-primary-600">
-            ${product.price}
-          </span>
-          <span
-            className={`text-sm font-medium ${
-              product.stock <= 10 ? 'text-red-600' : 'text-gray-600'
-            }`}
-          >
-            Stock: {product.stock}
-          </span>
+        <div className="mb-2">
+          <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
+          <p className="text-sm text-gray-500">{product.category}</p>
         </div>
 
-        <div className="flex justify-end space-x-2 mt-4">
-          <button
-            onClick={onEdit}
-            className="p-2 text-gray-600 hover:text-primary-600 transition-colors"
-          >
-            <FiEdit2 className="w-5 h-5" />
-          </button>
-          <button
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="p-2 text-gray-600 hover:text-red-600 transition-colors"
-          >
-            <FiTrash2 className="w-5 h-5" />
-          </button>
+        <div className="mb-4">
+          <p className="text-xl font-semibold text-gray-900">{formatCurrency(product.price)}</p>
+          <p className="text-sm text-gray-500">Stock: {product.stock}</p>
+          {product.supplier && (
+            <p className="text-sm text-gray-500">Supplier: {product.supplier}</p>
+          )}
         </div>
+
+        {isManager && (
+          <div className="flex justify-end space-x-2">
+            <button
+              onClick={() => onEdit(product)}
+              className="p-2 text-gray-600 hover:text-primary-600 rounded"
+            >
+              <FiEdit2 className="w-4 h-4" />
+            </button>
+            <button
+              onClick={handleDelete}
+              className="p-2 text-gray-600 hover:text-red-600 rounded"
+            >
+              <FiTrash2 className="w-4 h-4" />
+            </button>
+          </div>
+        )}
       </div>
     </motion.div>
   );

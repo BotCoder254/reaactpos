@@ -14,7 +14,8 @@ import {
   FiTag,
   FiTrendingUp,
   FiPause,
-  FiStar
+  FiStar,
+  FiPackage
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
 import { useHeldTransactions } from '../contexts/HeldTransactionsContext';
@@ -33,6 +34,7 @@ import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../utils/dy
 import { getReceiptBranding, generateReceiptHTML } from '../utils/receiptQueries';
 import ChangeCalculator from '../components/transactions/ChangeCalculator';
 import { toast } from 'react-hot-toast';
+import { useInventory } from '../contexts/InventoryContext';
 
 const TAX_RATE = 0.1; // 10% tax rate
 
@@ -71,6 +73,9 @@ export default function POS() {
   const [currentPaymentMethod, setCurrentPaymentMethod] = useState(null);
   const { loyaltyProgram, addPoints } = useLoyalty();
   const [loyaltyDiscount, setLoyaltyDiscount] = useState(0);
+  const { checkLowStock, findAlternatives } = useInventory();
+  const [alternativeProducts, setAlternativeProducts] = useState([]);
+  const [showAlternatives, setShowAlternatives] = useState(false);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -246,9 +251,22 @@ export default function POS() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, [filteredProducts, products]);
 
-  const addToCart = (product) => {
+  const addToCart = async (product) => {
     if (products[product.id].inCart) return;
     
+    // Check for low stock before adding to cart
+    const isLowStock = await checkLowStock(product.id);
+    
+    if (product.stock === 0) {
+      toast.error(`${product.name} is out of stock`);
+      const alternatives = await findAlternatives(product.id);
+      if (alternatives.length > 0) {
+        setAlternativeProducts(alternatives);
+        setShowAlternatives(true);
+      }
+      return;
+    }
+
     const dynamicPrice = calculateDynamicPrice(
       product.originalPrice || product.price,
       dynamicPricingRules
@@ -560,6 +578,76 @@ export default function POS() {
       );
       setFilteredProducts(filtered);
     }
+  };
+
+  const AlternativesModal = () => {
+    if (!showAlternatives) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 overflow-y-auto">
+        <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+          <div className="fixed inset-0 transition-opacity">
+            <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+          </div>
+
+          <span className="hidden sm:inline-block sm:align-middle sm:h-screen">&#8203;</span>
+
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            className="inline-block align-bottom bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6"
+          >
+            <div className="sm:flex sm:items-start">
+              <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
+                <h3 className="text-lg font-medium text-gray-900">
+                  Alternative Products Available
+                </h3>
+                <div className="mt-4 grid grid-cols-2 gap-4">
+                  {alternativeProducts.map(product => (
+                    <motion.div
+                      key={product.id}
+                      whileHover={{ scale: 1.02 }}
+                      className="bg-white p-4 rounded-lg shadow-sm cursor-pointer"
+                      onClick={() => {
+                        addToCart(product);
+                        setShowAlternatives(false);
+                      }}
+                    >
+                      <div className="relative">
+                        {product.images && product.images.length > 0 ? (
+                          <img
+                            src={product.images[0]}
+                            alt={product.name}
+                            className="w-full h-32 object-cover rounded-md mb-2"
+                          />
+                        ) : (
+                          <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded-md mb-2">
+                            <FiPackage className="w-8 h-8 text-gray-400" />
+                          </div>
+                        )}
+                      </div>
+                      <h3 className="font-medium text-gray-900">{product.name}</h3>
+                      <p className="text-sm text-gray-500">${product.price.toFixed(2)}</p>
+                      <p className="text-xs text-gray-400">Stock: {product.stock}</p>
+                    </motion.div>
+                  ))}
+                </div>
+                <div className="mt-5 sm:mt-4 sm:flex sm:flex-row-reverse">
+                  <button
+                    type="button"
+                    onClick={() => setShowAlternatives(false)}
+                    className="w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 sm:mt-0 sm:w-auto sm:text-sm"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    );
   };
 
   if (loading) {
@@ -933,6 +1021,8 @@ export default function POS() {
         onClose={() => setIsCustomerModalOpen(false)}
         onRefetch={() => handleCustomerSearch(customerSearchTerm)}
       />
+
+      <AlternativesModal />
     </div>
   );
 }
