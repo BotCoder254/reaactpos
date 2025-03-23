@@ -14,9 +14,9 @@ import {
   FiCheckCircle,
   FiXCircle,
   FiAlertCircle,
-  FiChevronUp,
+  FiEye,
   FiChevronDown,
-  FiEye
+  FiChevronUp
 } from 'react-icons/fi';
 import { useRefund } from '../../contexts/RefundContext';
 import { getRefundAnalytics } from '../../utils/refundQueries';

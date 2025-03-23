@@ -4,30 +4,46 @@ import { logActivity } from './activityLog';
 
 export const createRefundRequest = async (refundData) => {
   try {
-    const refundsRef = collection(db, 'refunds');
-    const docRef = await addDoc(refundsRef, {
-      ...refundData,
+    // Clean and validate data before sending to Firestore
+    const cleanData = {
+      orderId: refundData.orderId?.trim() || '',
+      amount: parseFloat(refundData.amount) || 0,
+      reason: refundData.reason?.trim() || '',
+      productId: refundData.productId || '',
+      productName: refundData.productName || '',
+      productSKU: refundData.productSKU || '',
+      cashierId: refundData.cashierId || '',
+      cashierName: refundData.cashierName || 'Unknown Cashier',
+      status: refundData.status || 'pending',
       createdAt: Timestamp.now(),
       updatedAt: Timestamp.now()
-    });
+    };
+
+    // Only add receipt if it exists
+    if (refundData.receipt) {
+      cleanData.receipt = refundData.receipt;
+    }
+
+    const refundsRef = collection(db, 'refunds');
+    const docRef = await addDoc(refundsRef, cleanData);
 
     await logActivity({
       type: 'refund_request_created',
-      details: `Created refund request for order ${refundData.orderId}`,
+      details: `Created refund request for order ${cleanData.orderId}`,
       metadata: {
         refundId: docRef.id,
-        orderId: refundData.orderId,
-        amount: refundData.amount
+        orderId: cleanData.orderId,
+        amount: cleanData.amount
       }
     });
 
     return {
       id: docRef.id,
-      ...refundData
+      ...cleanData
     };
   } catch (error) {
     console.error('Error creating refund request:', error);
-    throw error;
+    throw new Error('Failed to create refund request. Please try again.');
   }
 };
 

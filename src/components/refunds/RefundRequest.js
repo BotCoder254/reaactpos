@@ -13,6 +13,7 @@ import {
 } from 'react-icons/fi';
 import { useRefund } from '../../contexts/RefundContext';
 import { getProducts } from '../../utils/inventoryQueries';
+import { getOrders } from '../../utils/orderQueries';
 
 export default function RefundRequest() {
   const { initiateRefund, loading, error } = useRefund();
@@ -26,6 +27,9 @@ export default function RefundRequest() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showProductSearch, setShowProductSearch] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [showOrderSearch, setShowOrderSearch] = useState(false);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -36,7 +40,16 @@ export default function RefundRequest() {
         console.error('Error fetching products:', err);
       }
     };
+    const fetchOrders = async () => {
+      try {
+        const fetchedOrders = await getOrders();
+        setOrders(fetchedOrders);
+      } catch (err) {
+        console.error('Error fetching orders:', err);
+      }
+    };
     fetchProducts();
+    fetchOrders();
   }, []);
 
   const handleFileChange = (e) => {
@@ -53,8 +66,17 @@ export default function RefundRequest() {
 
   const handleProductSelect = (product) => {
     setSelectedProduct(product);
-    setAmount(product.price.toString());
+    if (product.price) {
+      setAmount(product.price.toString());
+    }
     setShowProductSearch(false);
+    setSearchTerm(product.name);
+  };
+
+  const handleOrderSelect = (order) => {
+    setOrderId(order.id);
+    setOrderSearchTerm(`${order.id} - ${order.customerName}`);
+    setShowOrderSearch(false);
   };
 
   const filteredProducts = products.filter(product =>
@@ -62,27 +84,43 @@ export default function RefundRequest() {
     product.sku?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  const filteredOrders = orders.filter(order =>
+    order.id.toLowerCase().includes(orderSearchTerm.toLowerCase()) ||
+    order.customerName?.toLowerCase().includes(orderSearchTerm.toLowerCase())
+  );
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError('');
 
-    if (!orderId || !amount || !reason || !receipt || !selectedProduct) {
-      setSubmitError('Please fill in all fields, select a product, and upload a receipt');
+    if (!orderId || !amount || !reason || !selectedProduct) {
+      setSubmitError('Please fill in all required fields and select a product');
       return;
     }
 
     try {
+      // Clean and validate data before submission
       const refundData = {
-        orderId,
-        amount: parseFloat(amount),
-        reason,
-        receipt,
-        productId: selectedProduct.id,
-        productName: selectedProduct.name,
-        productSKU: selectedProduct.sku,
+        orderId: orderId.trim(),
+        amount: parseFloat(amount) || 0,
+        reason: reason.trim(),
+        productId: selectedProduct?.id || '',
+        productName: selectedProduct?.name || '',
+        productSKU: selectedProduct?.sku || '',  // Add fallback for undefined SKU
         timestamp: new Date(),
         status: 'pending'
       };
+
+      // Only add receipt if it exists
+      if (receipt) {
+        refundData.receipt = receipt;
+      }
+
+      // Additional validation
+      if (refundData.amount <= 0) {
+        setSubmitError('Refund amount must be greater than 0');
+        return;
+      }
 
       await initiateRefund(refundData);
       
@@ -94,8 +132,10 @@ export default function RefundRequest() {
       setPreviewUrl('');
       setSelectedProduct(null);
       setSearchTerm('');
+      setOrderSearchTerm('');
     } catch (err) {
-      setSubmitError(err.message);
+      console.error('Refund submission error:', err);
+      setSubmitError(err.message || 'Failed to create refund request. Please try again.');
     }
   };
 
@@ -127,14 +167,36 @@ export default function RefundRequest() {
               <FiHash className="w-4 h-4 mr-1" />
               Order ID
             </label>
-            <input
-              type="text"
-              id="orderId"
-              value={orderId}
-              onChange={(e) => setOrderId(e.target.value)}
-              className="mt-1 block w-full h-10 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
-              placeholder="Enter the order ID"
-            />
+            <div className="relative">
+              <input
+                type="text"
+                id="orderId"
+                value={orderSearchTerm}
+                onChange={(e) => {
+                  setOrderSearchTerm(e.target.value);
+                  setShowOrderSearch(true);
+                }}
+                onFocus={() => setShowOrderSearch(true)}
+                className="mt-1 block w-full h-10 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-primary-500 focus:border-primary-500 sm:text-sm"
+                placeholder="Search by order ID or customer name"
+              />
+              {showOrderSearch && filteredOrders.length > 0 && (
+                <div className="absolute z-10 mt-1 w-full bg-white shadow-lg rounded-md border border-gray-200 max-h-60 overflow-auto">
+                  {filteredOrders.map((order) => (
+                    <div
+                      key={order.id}
+                      onClick={() => handleOrderSelect(order)}
+                      className="px-4 py-2 hover:bg-gray-50 cursor-pointer"
+                    >
+                      <div className="font-medium">{order.id}</div>
+                      <div className="text-sm text-gray-500">
+                        Customer: {order.customerName}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
@@ -242,7 +304,7 @@ export default function RefundRequest() {
           <div>
             <label className="block text-sm font-medium text-gray-700 flex items-center">
               <FiUpload className="w-4 h-4 mr-1" />
-              Receipt Upload
+              Receipt Upload (Optional)
             </label>
             <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
               <div className="space-y-1 text-center">

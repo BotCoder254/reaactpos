@@ -1,4 +1,4 @@
-import { collection, addDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, getDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { logActivity } from './activityLog';
 
@@ -66,5 +66,23 @@ export const getOrder = async (orderId) => {
   } catch (error) {
     console.error('Error fetching order:', error);
     throw new Error('Failed to fetch order');
+  }
+};
+
+export const getOrders = async () => {
+  try {
+    const ordersRef = collection(db, 'orders');
+    const q = query(ordersRef, orderBy('createdAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    return querySnapshot.docs.map(doc => ({
+      id: doc.id,
+      customerName: doc.data().customerName || 'Unknown Customer',
+      ...doc.data(),
+      createdAt: doc.data().createdAt?.toDate()
+    }));
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    throw error;
   }
 }; 
