@@ -75,7 +75,7 @@ export default function RefundManager() {
       const now = new Date();
       const days = parseInt(filters.dateRange);
       const cutoff = new Date(now.setDate(now.getDate() - days));
-      filtered = filtered.filter(req => new Date(req.timestamp) >= cutoff);
+      filtered = filtered.filter(req => new Date(req.createdAt) >= cutoff);
     }
 
     // Apply sorting
@@ -83,9 +83,9 @@ export default function RefundManager() {
       let aValue = a[sortConfig.key];
       let bValue = b[sortConfig.key];
 
-      if (sortConfig.key === 'timestamp') {
-        aValue = new Date(aValue);
-        bValue = new Date(bValue);
+      if (sortConfig.key === 'timestamp' || sortConfig.key === 'createdAt') {
+        aValue = new Date(a.createdAt);
+        bValue = new Date(b.createdAt);
       }
 
       if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
@@ -113,7 +113,7 @@ export default function RefundManager() {
       'Amount': req.amount,
       'Status': req.status,
       'Cashier': req.cashierName,
-      'Date': new Date(req.timestamp).toLocaleString(),
+      'Date': new Date(req.createdAt).toLocaleString(),
       'Reason': req.reason
     }));
 
@@ -268,7 +268,7 @@ export default function RefundManager() {
               {filteredAndSortedRequests().map((request) => (
                 <tr key={request.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {new Date(request.timestamp).toLocaleString()}
+                    {new Date(request.createdAt).toLocaleString()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {request.orderId}
@@ -380,7 +380,7 @@ export default function RefundManager() {
                 <div>
                   <label className="block text-sm font-medium text-gray-500">Date</label>
                   <p className="mt-1 text-sm text-gray-900">
-                    {new Date(selectedRequest.timestamp).toLocaleString()}
+                    {new Date(selectedRequest.createdAt).toLocaleString()}
                   </p>
                 </div>
               </div>
