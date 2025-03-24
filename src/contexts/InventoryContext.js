@@ -9,6 +9,8 @@ import {
   deleteDoc,
   query,
   where,
+  getDoc,
+  orderBy
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import toast from 'react-hot-toast';
@@ -25,6 +27,7 @@ export function InventoryProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const { currentUser, userRole } = useAuth();
+  const [lowStockThreshold, setLowStockThreshold] = useState(10);
 
   useEffect(() => {
     if (!currentUser) {
@@ -198,38 +201,49 @@ export function InventoryProvider({ children }) {
   };
 
   const checkLowStock = async (productId) => {
-    const product = products.find(p => p.id === productId);
-    if (!product) return false;
+    try {
+      const productRef = doc(db, 'products', productId);
+      const productDoc = await getDoc(productRef);
+      
+      if (!productDoc.exists()) {
+        return false;
+      }
 
-    const isLowStock = product.stock <= product.minStockThreshold;
-    if (isLowStock) {
-      toast.warning(`Low stock alert: ${product.name} (${product.stock} remaining)`);
+      const product = productDoc.data();
+      return product.stock <= lowStockThreshold;
+    } catch (error) {
+      console.error('Error checking stock level:', error);
+      return false;
     }
-    return isLowStock;
   };
 
   const findAlternatives = async (productId) => {
     try {
-      const product = products.find(p => p.id === productId);
-      if (!product) return [];
+      const productRef = doc(db, 'products', productId);
+      const productDoc = await getDoc(productRef);
+      
+      if (!productDoc.exists()) {
+        return [];
+      }
 
-      // Find products in the same category with stock available
-      const alternatives = products.filter(p => 
-        p.id !== productId && 
-        p.category === product.category && 
-        p.stock > 0
+      const product = productDoc.data();
+      const alternativesQuery = query(
+        collection(db, 'products'),
+        where('category', '==', product.category),
+        where('stock', '>', 0),
+        orderBy('stock', 'desc')
       );
 
-      // Sort by price similarity
-      alternatives.sort((a, b) => {
-        const priceDiffA = Math.abs(a.price - product.price);
-        const priceDiffB = Math.abs(b.price - product.price);
-        return priceDiffA - priceDiffB;
-      });
-
-      return alternatives.slice(0, 5); // Return top 5 alternatives
-    } catch (err) {
-      console.error('Error finding alternatives:', err);
+      const snapshot = await getDocs(alternativesQuery);
+      return snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(alt => alt.id !== productId)
+        .slice(0, 4); // Return top 4 alternatives
+    } catch (error) {
+      console.error('Error finding alternatives:', error);
       return [];
     }
   };
@@ -245,7 +259,9 @@ export function InventoryProvider({ children }) {
     deleteProductImage,
     updateStock,
     checkLowStock,
-    findAlternatives
+    findAlternatives,
+    lowStockThreshold,
+    setLowStockThreshold
   };
 
   return (

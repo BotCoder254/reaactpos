@@ -269,6 +269,18 @@ export default function POS() {
       return;
     }
 
+    // Show low stock notification if needed
+    if (isLowStock) {
+      toast(`${product.name} is running low on stock`, {
+        icon: '⚠️',
+        duration: 3000,
+        style: {
+          backgroundColor: '#FEF3C7',
+          color: '#92400E'
+        }
+      });
+    }
+
     const dynamicPrice = calculateDynamicPrice(
       product.originalPrice || product.price,
       dynamicPricingRules
