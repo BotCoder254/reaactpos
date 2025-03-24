@@ -34,7 +34,7 @@ export default function Sidebar() {
   const managerNavItems = [
     { name: 'Dashboard', icon: HomeIcon, path: '/' },
     { name: 'POS', icon: ShoppingCartIcon, path: '/pos' },
-    // { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
+    { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
     { name: 'Inventory', icon: ArchiveBoxIcon, path: '/inventory' },
     { name: 'Inventory Dashboard', icon: ChartBarIcon, path: '/inventory/dashboard' },
     { name: 'Stock Management', icon: InboxStackIcon, path: '/inventory/stock' },

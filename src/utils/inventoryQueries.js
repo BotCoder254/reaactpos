@@ -29,30 +29,41 @@ const uploadImage = async (file, productId) => {
     const storageRef = ref(storage, `products/${productId}/${uniqueFileName}`);
     const snapshot = await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(snapshot.ref);
-    return downloadURL;
+    return { url: downloadURL, path: storageRef.fullPath };
   } catch (error) {
     console.error('Error uploading image:', error);
     throw error;
   }
 };
 
-const ensureImageURLs = async (urls = []) => {
+const ensureImageURLs = async (images = []) => {
   try {
+    if (!Array.isArray(images)) return [];
+    
     return await Promise.all(
-      urls.map(async (url) => {
-        if (!url) return null;
+      images.map(async (image) => {
+        if (!image) return null;
         try {
-          // If URL is already a full URL, return it
-          if (url.startsWith('http')) return url;
-          // Otherwise, try to get the download URL
-          const storageRef = ref(storage, url);
-          return await getDownloadURL(storageRef);
+          // If image is an object with url and path, return it
+          if (image.url && image.path) return image;
+          
+          // If image is a string URL
+          if (typeof image === 'string') {
+            if (image.startsWith('http')) {
+              return { url: image, path: null };
+            }
+            // If it's a storage path
+            const storageRef = ref(storage, image);
+            const url = await getDownloadURL(storageRef);
+            return { url, path: image };
+          }
+          return null;
         } catch (error) {
-          console.error('Error getting image URL:', error);
+          console.error('Error ensuring image URL:', error);
           return null;
         }
       })
-    ).then(urls => urls.filter(url => url !== null));
+    ).then(images => images.filter(img => img !== null));
   } catch (error) {
     console.error('Error ensuring image URLs:', error);
     return [];
@@ -72,16 +83,16 @@ export async function addProduct(productData, images = []) {
     });
 
     // Then upload images if any
-    const imageUrls = [];
+    const uploadedImages = [];
     if (images && images.length > 0) {
       for (const image of images) {
-        const imageUrl = await uploadImage(image, docRef.id);
-        if (imageUrl) imageUrls.push(imageUrl);
+        const imageData = await uploadImage(image, docRef.id);
+        if (imageData) uploadedImages.push(imageData);
       }
 
-      // Update the product with image URLs
-      if (imageUrls.length > 0) {
-        await updateDoc(docRef, { images: imageUrls });
+      // Update the product with image data
+      if (uploadedImages.length > 0) {
+        await updateDoc(docRef, { images: uploadedImages });
       }
     }
 
@@ -97,7 +108,7 @@ export async function addProduct(productData, images = []) {
     return {
       id: docRef.id,
       ...productData,
-      images: imageUrls
+      images: uploadedImages
     };
   } catch (error) {
     console.error('Error adding product:', error);
@@ -120,16 +131,16 @@ export async function updateProduct(productId, productData, newImages = []) {
     const existingImages = await ensureImageURLs(existingData.images || []);
     
     // Upload new images if any
-    const newImageUrls = [];
+    const newUploadedImages = [];
     if (newImages && newImages.length > 0) {
       for (const image of newImages) {
-        const imageUrl = await uploadImage(image, productId);
-        if (imageUrl) newImageUrls.push(imageUrl);
+        const imageData = await uploadImage(image, productId);
+        if (imageData) newUploadedImages.push(imageData);
       }
     }
 
-    // Combine existing and new image URLs
-    const updatedImages = [...existingImages, ...newImageUrls];
+    // Combine existing and new image data
+    const updatedImages = [...existingImages, ...newUploadedImages];
 
     // Update the product with all data including images
     const updateData = {
@@ -162,16 +173,23 @@ export async function updateProduct(productId, productData, newImages = []) {
 // Delete a product
 export async function deleteProduct(productId, productName) {
   try {
-    // Delete all images from storage first
     const productRef = doc(db, 'products', productId);
-    const productSnapshot = await getDocs(query(collection(db, 'products'), where('id', '==', productId)));
-    const product = productSnapshot.docs[0]?.data();
+    const productSnap = await getDoc(productRef);
     
+    if (!productSnap.exists()) {
+      throw new Error('Product not found');
+    }
+    
+    const product = productSnap.data();
+    
+    // Delete all images from storage first
     if (product?.images && Array.isArray(product.images)) {
-      for (const imageUrl of product.images) {
+      for (const image of product.images) {
         try {
-          const imageRef = ref(storage, imageUrl);
-          await deleteObject(imageRef);
+          if (image.path) {
+            const imageRef = ref(storage, image.path);
+            await deleteObject(imageRef);
+          }
         } catch (error) {
           console.error('Error deleting image:', error);
           // Continue with other images even if one fails
@@ -220,7 +238,7 @@ export async function getProducts(filters = {}) {
       querySnapshot.docs.map(async (doc) => {
         const data = doc.data();
         // Ensure all image URLs are valid and accessible
-        const validatedImages = await ensureImageURLs(data.images);
+        const validatedImages = await ensureImageURLs(data.images || []);
         return {
           id: doc.id,
           ...data,
@@ -246,7 +264,7 @@ export async function getLowStockProducts(threshold = 10) {
     const products = await Promise.all(
       querySnapshot.docs.map(async (doc) => {
         const data = doc.data();
-        const validatedImages = await ensureImageURLs(data.images);
+        const validatedImages = await ensureImageURLs(data.images || []);
         return {
           id: doc.id,
           ...data,
@@ -267,17 +285,28 @@ export async function importProductsFromCSV(csvData) {
   try {
     const batch = [];
     for (const product of csvData) {
+      const productData = {
+        ...product,
+        stock: parseInt(product.stock),
+        price: parseFloat(product.price),
+        createdAt: Timestamp.now(),
+        updatedAt: Timestamp.now(),
+        images: [] // Initialize with empty array
+      };
+      
       batch.push(
-        addDoc(collection(db, 'products'), {
-          ...product,
-          stock: parseInt(product.stock),
-          price: parseFloat(product.price),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
+        addDoc(collection(db, 'products'), productData)
       );
     }
     await Promise.all(batch);
+    
+    await logActivity({
+      type: 'products_imported',
+      details: `Imported ${csvData.length} products from CSV`,
+      metadata: {
+        count: csvData.length
+      }
+    });
   } catch (error) {
     console.error('Error importing products:', error);
     throw error;
@@ -285,23 +314,29 @@ export async function importProductsFromCSV(csvData) {
 }
 
 // Delete image from product
-export async function deleteProductImage(productId, imageUrl) {
+export async function deleteProductImage(productId, imageData) {
   try {
-    // Delete image from storage
-    const imageRef = ref(storage, imageUrl);
-    await deleteObject(imageRef);
+    // Delete image from storage if it has a path
+    if (imageData.path) {
+      const imageRef = ref(storage, imageData.path);
+      await deleteObject(imageRef);
+    }
 
-    // Update product document to remove the image URL
+    // Update product document to remove the image
     const productRef = doc(db, 'products', productId);
-    const productSnapshot = await getDocs(query(collection(db, 'products'), where('id', '==', productId)));
-    const product = productSnapshot.docs[0]?.data();
+    const productSnap = await getDoc(productRef);
     
-    if (product?.images) {
-      const updatedImages = product.images.filter(url => url !== imageUrl);
-      await updateDoc(productRef, { 
-        images: updatedImages,
-        updatedAt: Timestamp.now()
-      });
+    if (productSnap.exists()) {
+      const product = productSnap.data();
+      if (product?.images) {
+        const updatedImages = product.images.filter(img => 
+          img.path !== imageData.path && img.url !== imageData.url
+        );
+        await updateDoc(productRef, { 
+          images: updatedImages,
+          updatedAt: Timestamp.now()
+        });
+      }
     }
 
     await logActivity({
@@ -309,7 +344,7 @@ export async function deleteProductImage(productId, imageUrl) {
       details: `Deleted image from product: ${productId}`,
       metadata: {
         productId,
-        imageUrl
+        imageUrl: imageData.url
       }
     });
 
@@ -323,13 +358,13 @@ export async function deleteProductImage(productId, imageUrl) {
 export const updateStock = async (productId, quantity, type = 'add') => {
   try {
     const productRef = doc(db, 'products', productId);
-    const productSnapshot = await getDocs(query(collection(db, 'products'), where('id', '==', productId)));
-    const product = productSnapshot.docs[0]?.data();
+    const productSnap = await getDoc(productRef);
     
-    if (!product) {
+    if (!productSnap.exists()) {
       throw new Error('Product not found');
     }
 
+    const product = productSnap.data();
     const currentStock = product.stock || 0;
     const newStock = type === 'add' ? currentStock + quantity : currentStock - quantity;
 

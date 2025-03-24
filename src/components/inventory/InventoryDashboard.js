@@ -302,11 +302,26 @@ export default function InventoryDashboard() {
             >
               <div className="relative">
                 {product.images && product.images.length > 0 ? (
-                  <img
-                    src={product.images[0]}
-                    alt={product.name}
-                    className="w-full h-32 object-cover rounded-md mb-2"
-                  />
+                  <>
+                    <img
+                      src={typeof product.images[0] === 'string' 
+                        ? product.images[0] 
+                        : product.images[0].url || product.images[0].thumb}
+                      alt={product.name}
+                      className="w-full h-32 object-cover rounded-md mb-2"
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
+                      }}
+                    />
+                    {product.images[0].photographer && (
+                      <div className="absolute bottom-2 left-2">
+                        <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full">
+                          Photo by {product.images[0].photographer}
+                        </span>
+                      </div>
+                    )}
+                  </>
                 ) : (
                   <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded-md mb-2">
                     <FiPackage className="w-8 h-8 text-gray-400" />

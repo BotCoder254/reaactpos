@@ -1,14 +1,16 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import {
-  getProducts,
-  addProduct,
-  updateProduct,
-  deleteProduct,
-  updateStock,
-  getLowStockProducts,
-  getAlternativeProducts
-} from '../utils/inventoryQueries';
+  collection,
+  doc,
+  getDocs,
+  addDoc,
+  updateDoc,
+  deleteDoc,
+  query,
+  where,
+} from 'firebase/firestore';
+import { db } from '../firebase';
 import toast from 'react-hot-toast';
 
 const InventoryContext = createContext();
@@ -33,12 +35,19 @@ export function InventoryProvider({ children }) {
     const fetchProducts = async () => {
       try {
         setLoading(true);
-        const fetchedProducts = await getProducts();
+        const productsRef = collection(db, 'products');
+        const querySnapshot = await getDocs(productsRef);
+        const fetchedProducts = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
         setProducts(fetchedProducts);
 
         // Only fetch low stock products for managers
         if (userRole === 'manager') {
-          const lowStock = await getLowStockProducts();
+          const lowStock = fetchedProducts.filter(
+            product => product.stock <= (product.minStockThreshold || 10)
+          );
           setLowStockProducts(lowStock);
         }
 
@@ -54,10 +63,23 @@ export function InventoryProvider({ children }) {
     fetchProducts();
   }, [currentUser, userRole]);
 
-  const addNewProduct = async (productData) => {
+  const addProduct = async (productData) => {
     try {
       setError(null);
-      const newProduct = await addProduct(productData);
+      const productsRef = collection(db, 'products');
+      const docRef = await addDoc(productsRef, {
+        ...productData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      
+      const newProduct = {
+        id: docRef.id,
+        ...productData,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      
       setProducts(prev => [...prev, newProduct]);
       toast.success('Product added successfully');
       return newProduct;
@@ -68,15 +90,25 @@ export function InventoryProvider({ children }) {
     }
   };
 
-  const updateExistingProduct = async (productId, productData) => {
+  const updateProduct = async (productId, productData) => {
     try {
       setError(null);
-      await updateProduct(productId, productData);
+      const productRef = doc(db, 'products', productId);
+      const updatedData = {
+        ...productData,
+        updatedAt: new Date().toISOString(),
+      };
+      
+      await updateDoc(productRef, updatedData);
+      
       setProducts(prev =>
         prev.map(product =>
-          product.id === productId ? { ...product, ...productData } : product
+          product.id === productId
+            ? { ...product, ...updatedData }
+            : product
         )
       );
+      
       toast.success('Product updated successfully');
     } catch (err) {
       setError('Failed to update product');
@@ -85,12 +117,13 @@ export function InventoryProvider({ children }) {
     }
   };
 
-  const removeProduct = async (productId, productName) => {
+  const deleteProduct = async (productId, productName) => {
     try {
       setError(null);
-      await deleteProduct(productId, productName);
+      const productRef = doc(db, 'products', productId);
+      await deleteDoc(productRef);
       setProducts(prev => prev.filter(product => product.id !== productId));
-      toast.success('Product deleted successfully');
+      toast.success(`${productName} deleted successfully`);
     } catch (err) {
       setError('Failed to delete product');
       toast.error('Failed to delete product');
@@ -98,21 +131,64 @@ export function InventoryProvider({ children }) {
     }
   };
 
-  const updateProductStock = async (productId, quantity, type = 'add') => {
+  const deleteProductImage = async (productId, imageData) => {
     try {
       setError(null);
-      await updateStock(productId, quantity, type);
-      setProducts(prev =>
-        prev.map(product => {
-          if (product.id === productId) {
-            const newStock = type === 'add'
-              ? product.stock + quantity
-              : Math.max(0, product.stock - quantity);
-            return { ...product, stock: newStock };
-          }
-          return product;
-        })
+      const productRef = doc(db, 'products', productId);
+      const product = products.find(p => p.id === productId);
+      
+      if (!product) throw new Error('Product not found');
+      
+      const updatedImages = product.images.filter(img => 
+        img.unsplashId !== imageData.unsplashId
       );
+      
+      await updateDoc(productRef, {
+        images: updatedImages,
+        updatedAt: new Date().toISOString(),
+      });
+      
+      setProducts(prev =>
+        prev.map(p =>
+          p.id === productId
+            ? { ...p, images: updatedImages }
+            : p
+        )
+      );
+      
+      toast.success('Image removed successfully');
+    } catch (err) {
+      setError('Failed to delete image');
+      toast.error('Failed to delete image');
+      throw err;
+    }
+  };
+
+  const updateStock = async (productId, quantity, type = 'add') => {
+    try {
+      setError(null);
+      const productRef = doc(db, 'products', productId);
+      const product = products.find(p => p.id === productId);
+      
+      if (!product) throw new Error('Product not found');
+      
+      const newStock = type === 'add'
+        ? product.stock + quantity
+        : Math.max(0, product.stock - quantity);
+      
+      await updateDoc(productRef, {
+        stock: newStock,
+        updatedAt: new Date().toISOString(),
+      });
+      
+      setProducts(prev =>
+        prev.map(p =>
+          p.id === productId
+            ? { ...p, stock: newStock }
+            : p
+        )
+      );
+      
       toast.success('Stock updated successfully');
     } catch (err) {
       setError('Failed to update stock');
@@ -137,8 +213,21 @@ export function InventoryProvider({ children }) {
       const product = products.find(p => p.id === productId);
       if (!product) return [];
 
-      const alternatives = await getAlternativeProducts(productId, product.category);
-      return alternatives;
+      // Find products in the same category with stock available
+      const alternatives = products.filter(p => 
+        p.id !== productId && 
+        p.category === product.category && 
+        p.stock > 0
+      );
+
+      // Sort by price similarity
+      alternatives.sort((a, b) => {
+        const priceDiffA = Math.abs(a.price - product.price);
+        const priceDiffB = Math.abs(b.price - product.price);
+        return priceDiffA - priceDiffB;
+      });
+
+      return alternatives.slice(0, 5); // Return top 5 alternatives
     } catch (err) {
       console.error('Error finding alternatives:', err);
       return [];
@@ -150,10 +239,11 @@ export function InventoryProvider({ children }) {
     lowStockProducts,
     loading,
     error,
-    addProduct: addNewProduct,
-    updateProduct: updateExistingProduct,
-    deleteProduct: removeProduct,
-    updateStock: updateProductStock,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    deleteProductImage,
+    updateStock,
     checkLowStock,
     findAlternatives
   };

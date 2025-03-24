@@ -1,5 +1,4 @@
-import { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import React, { useState, useEffect } from 'react';
 import { FiEdit2, FiTrash2, FiImage } from 'react-icons/fi';
 import { useInventory } from '../../contexts/InventoryContext';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -10,13 +9,25 @@ export default function ProductCard({ product, onEdit, isManager }) {
   const [validImages, setValidImages] = useState([]);
 
   useEffect(() => {
-    const validateImages = async () => {
+    const validateImages = () => {
       if (!product.images || !Array.isArray(product.images)) {
         setValidImages([]);
         return;
       }
 
-      const validUrls = product.images.filter(url => url && typeof url === 'string');
+      const validUrls = product.images
+        .filter(image => {
+          if (!image) return false;
+          if (typeof image === 'string') return image.startsWith('http');
+          return image.url && image.url.startsWith('http');
+        })
+        .map(image => ({
+          url: typeof image === 'string' ? image : image.url,
+          thumb: image.thumb || image.url,
+          photographer: image.photographer || null,
+          unsplashId: image.unsplashId || null,
+        }));
+
       setValidImages(validUrls);
     };
 
@@ -25,7 +36,11 @@ export default function ProductCard({ product, onEdit, isManager }) {
 
   const handleDelete = async () => {
     if (window.confirm(`Are you sure you want to delete ${product.name}?`)) {
-      await deleteProduct(product.id, product.name);
+      try {
+        await deleteProduct(product.id, product.name);
+      } catch (error) {
+        console.error('Error deleting product:', error);
+      }
     }
   };
 
@@ -37,44 +52,54 @@ export default function ProductCard({ product, onEdit, isManager }) {
     }
   };
 
+  const handleImageError = (e) => {
+    e.target.onerror = null;
+    e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
+  };
+
   const getStockStatusColor = () => {
     if (product.stock === 0) return 'bg-red-100 text-red-800';
-    if (product.stock <= product.minStockThreshold) return 'bg-yellow-100 text-yellow-800';
+    if (product.stock <= (product.minStockThreshold || 10)) return 'bg-yellow-100 text-yellow-800';
     return 'bg-green-100 text-green-800';
   };
 
   const getStockStatusText = () => {
     if (product.stock === 0) return 'Out of Stock';
-    if (product.stock <= product.minStockThreshold) return 'Low Stock';
+    if (product.stock <= (product.minStockThreshold || 10)) return 'Low Stock';
     return 'In Stock';
   };
 
   return (
-    <motion.div
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="bg-white rounded-lg shadow-sm overflow-hidden"
-    >
+    <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="relative">
         {validImages.length > 0 ? (
           <>
             <img
-              src={validImages[currentImageIndex]}
+              src={validImages[currentImageIndex].url}
               alt={product.name}
               className="w-full h-48 object-cover cursor-pointer"
               onClick={nextImage}
-              onError={(e) => {
-                e.target.onerror = null;
-                e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
-              }}
+              onError={handleImageError}
             />
             {validImages.length > 1 && (
-              <button
-                onClick={nextImage}
-                className="absolute bottom-2 right-2 p-1 bg-black bg-opacity-50 rounded-full text-white"
-              >
-                <FiImage className="w-4 h-4" />
-              </button>
+              <div className="absolute bottom-2 right-2 flex space-x-1">
+                <button
+                  onClick={nextImage}
+                  className="p-1 bg-black bg-opacity-50 rounded-full text-white"
+                >
+                  <FiImage className="w-4 h-4" />
+                </button>
+                <span className="p-1 bg-black bg-opacity-50 rounded-full text-white text-xs">
+                  {currentImageIndex + 1}/{validImages.length}
+                </span>
+              </div>
+            )}
+            {validImages[currentImageIndex].photographer && (
+              <div className="absolute bottom-2 left-2">
+                <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full">
+                  Photo by {validImages[currentImageIndex].photographer}
+                </span>
+              </div>
             )}
           </>
         ) : (
@@ -92,7 +117,9 @@ export default function ProductCard({ product, onEdit, isManager }) {
       <div className="p-4">
         <div className="mb-2">
           <h3 className="text-lg font-medium text-gray-900">{product.name}</h3>
-          <p className="text-sm text-gray-500">{product.category}</p>
+          {product.category && (
+            <p className="text-sm text-gray-500">{product.category}</p>
+          )}
         </div>
 
         <div className="mb-4">
@@ -100,6 +127,9 @@ export default function ProductCard({ product, onEdit, isManager }) {
           <p className="text-sm text-gray-500">Stock: {product.stock}</p>
           {product.supplier && (
             <p className="text-sm text-gray-500">Supplier: {product.supplier}</p>
+          )}
+          {product.description && (
+            <p className="text-sm text-gray-500 mt-2">{product.description}</p>
           )}
         </div>
 
@@ -120,6 +150,6 @@ export default function ProductCard({ product, onEdit, isManager }) {
           </div>
         )}
       </div>
-    </motion.div>
+    </div>
   );
 } 

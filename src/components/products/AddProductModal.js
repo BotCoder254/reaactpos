@@ -1,8 +1,7 @@
 import React, { useState } from 'react';
-import { collection, addDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { db, storage } from '../../firebase';
 import { FiUpload, FiTrash2 } from 'react-icons/fi';
+import { addProduct } from '../../utils/inventoryQueries';
+import toast from 'react-hot-toast';
 
 function AddProductModal({ isOpen, onClose, onProductAdded }) {
   const [product, setProduct] = useState({
@@ -10,24 +9,39 @@ function AddProductModal({ isOpen, onClose, onProductAdded }) {
     price: '',
     description: '',
     stock: '',
+    category: '',
+    supplier: '',
+    minStockThreshold: '10',
   });
   const [images, setImages] = useState([]);
   const [previewUrls, setPreviewUrls] = useState([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    setImages((prev) => [...prev, ...files]);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+    
+    // Clean up old preview URLs to prevent memory leaks
+    previewUrls.forEach(url => {
+      if (url.startsWith('blob:')) {
+        URL.revokeObjectURL(url);
+      }
+    });
+    
+    const validImageFiles = files.filter(file => file.type.startsWith('image/'));
+    setImages(prevImages => [...prevImages, ...validImageFiles]);
 
-    const newPreviewUrls = files.map((file) => URL.createObjectURL(file));
-    setPreviewUrls((prev) => [...prev, ...newPreviewUrls]);
+    const newPreviewUrls = validImageFiles.map(file => URL.createObjectURL(file));
+    setPreviewUrls(prevUrls => [...prevUrls, ...newPreviewUrls]);
   };
 
   const handleRemoveImage = (index) => {
     setImages((prev) => prev.filter((_, i) => i !== index));
     setPreviewUrls((prev) => {
       const newUrls = prev.filter((_, i) => i !== index);
-      prev[index] && URL.revokeObjectURL(prev[index]);
+      if (prev[index]?.startsWith('blob:')) {
+        URL.revokeObjectURL(prev[index]);
+      }
       return newUrls;
     });
   };
@@ -37,32 +51,34 @@ function AddProductModal({ isOpen, onClose, onProductAdded }) {
     try {
       setIsSubmitting(true);
 
-      // Upload images first
-      const imageUrls = await Promise.all(
-        images.map(async (image) => {
-          const storageRef = ref(storage, `products/${Date.now()}_${image.name}`);
-          await uploadBytes(storageRef, image);
-          return getDownloadURL(storageRef);
-        })
-      );
-
-      // Add product with image URLs
-      const productsRef = collection(db, 'products');
-      await addDoc(productsRef, {
+      const productData = {
         ...product,
         price: Number(product.price),
         stock: Number(product.stock),
-        images: imageUrls,
+        minStockThreshold: Number(product.minStockThreshold),
         createdAt: new Date()
-      });
+      };
 
+      await addProduct(productData, images);
+      toast.success('Product added successfully!');
       onProductAdded();
       onClose();
-      setProduct({ name: '', price: '', description: '', stock: '' });
+      
+      // Reset form
+      setProduct({
+        name: '',
+        price: '',
+        description: '',
+        stock: '',
+        category: '',
+        supplier: '',
+        minStockThreshold: '10',
+      });
       setImages([]);
       setPreviewUrls([]);
     } catch (error) {
       console.error('Error adding product:', error);
+      toast.error('Failed to add product');
     } finally {
       setIsSubmitting(false);
     }
@@ -83,6 +99,15 @@ function AddProductModal({ isOpen, onClose, onProductAdded }) {
                 required
                 value={product.name}
                 onChange={(e) => setProduct({ ...product, name: e.target.value })}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Category</label>
+              <input
+                type="text"
+                value={product.category}
+                onChange={(e) => setProduct({ ...product, category: e.target.value })}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
               />
             </div>
@@ -115,53 +140,79 @@ function AddProductModal({ isOpen, onClose, onProductAdded }) {
                 value={product.description}
                 onChange={(e) => setProduct({ ...product, description: e.target.value })}
                 className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
-                rows="3"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Images</label>
-              <div className="grid grid-cols-2 gap-4 mb-4">
-                {previewUrls.map((url, index) => (
-                  <div key={url} className="relative">
-                    <img
-                      src={url}
-                      alt={`Preview ${index + 1}`}
-                      className="w-full h-24 object-cover rounded-lg"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveImage(index)}
-                      className="absolute top-1 right-1 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
-                    >
-                      <FiTrash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                ))}
-                <label className="border-2 border-dashed border-gray-300 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:border-primary-500">
-                  <FiUpload className="w-6 h-6 text-gray-400" />
-                  <span className="mt-2 text-sm text-gray-500">Add Image</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={handleImageChange}
-                    className="hidden"
-                  />
+              <label className="block text-sm font-medium text-gray-700">Supplier</label>
+              <input
+                type="text"
+                value={product.supplier}
+                onChange={(e) => setProduct({ ...product, supplier: e.target.value })}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Min Stock Threshold</label>
+              <input
+                type="number"
+                min="0"
+                value={product.minStockThreshold}
+                onChange={(e) => setProduct({ ...product, minStockThreshold: e.target.value })}
+                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Images</label>
+              <div className="mt-1 flex items-center">
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageChange}
+                  className="hidden"
+                  id="image-upload"
+                />
+                <label
+                  htmlFor="image-upload"
+                  className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                >
+                  <FiUpload className="mr-2 -ml-1 h-5 w-5" />
+                  Upload Images
                 </label>
               </div>
+              {previewUrls.length > 0 && (
+                <div className="mt-4 grid grid-cols-3 gap-2">
+                  {previewUrls.map((url, index) => (
+                    <div key={index} className="relative">
+                      <img
+                        src={url}
+                        alt={`Preview ${index + 1}`}
+                        className="h-20 w-20 object-cover rounded"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveImage(index)}
+                        className="absolute top-0 right-0 p-1 bg-red-500 text-white rounded-full"
+                      >
+                        <FiTrash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="flex justify-end space-x-2">
               <button
                 type="button"
                 onClick={onClose}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300"
+                className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-primary-600 hover:bg-primary-700 disabled:opacity-50"
               >
                 {isSubmitting ? 'Adding...' : 'Add Product'}
               </button>

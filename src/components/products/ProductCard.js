@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,7 +9,29 @@ function ProductCard({ product, onUpdate }) {
   const [isEditing, setIsEditing] = useState(false);
   const [editedProduct, setEditedProduct] = useState(product);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
+  const [validImages, setValidImages] = useState([]);
   const { currentUser } = useAuth();
+
+  useEffect(() => {
+    const validateImages = () => {
+      if (!product.images || !Array.isArray(product.images)) {
+        setValidImages([]);
+        return;
+      }
+
+      const validUrls = product.images
+        .filter(image => {
+          if (!image) return false;
+          if (typeof image === 'string') return image.startsWith('http');
+          return image.url && image.url.startsWith('http');
+        })
+        .map(image => typeof image === 'string' ? image : image.url);
+
+      setValidImages(validUrls);
+    };
+
+    validateImages();
+  }, [product.images]);
 
   const handleDelete = async () => {
     if (window.confirm('Are you sure you want to delete this product?')) {
@@ -40,31 +62,42 @@ function ProductCard({ product, onUpdate }) {
   };
 
   const nextImage = () => {
-    if (product.images && product.images.length > 1) {
+    if (validImages.length > 1) {
       setCurrentImageIndex((prev) =>
-        prev === product.images.length - 1 ? 0 : prev + 1
+        prev === validImages.length - 1 ? 0 : prev + 1
       );
     }
+  };
+
+  const handleImageError = (e) => {
+    e.target.onerror = null;
+    e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
   };
 
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
       <div className="relative">
-        {product.images && product.images.length > 0 ? (
+        {validImages.length > 0 ? (
           <>
             <img
-              src={product.images[currentImageIndex]}
+              src={validImages[currentImageIndex]}
               alt={product.name}
               className="w-full h-48 object-cover cursor-pointer"
               onClick={nextImage}
+              onError={handleImageError}
             />
-            {product.images.length > 1 && (
-              <button
-                onClick={nextImage}
-                className="absolute bottom-2 right-2 p-1 bg-black bg-opacity-50 rounded-full text-white"
-              >
-                <FiImage className="w-4 h-4" />
-              </button>
+            {validImages.length > 1 && (
+              <div className="absolute bottom-2 right-2 flex space-x-1">
+                <button
+                  onClick={nextImage}
+                  className="p-1 bg-black bg-opacity-50 rounded-full text-white"
+                >
+                  <FiImage className="w-4 h-4" />
+                </button>
+                <span className="p-1 bg-black bg-opacity-50 rounded-full text-white text-xs">
+                  {currentImageIndex + 1}/{validImages.length}
+                </span>
+              </div>
             )}
           </>
         ) : (
@@ -72,7 +105,7 @@ function ProductCard({ product, onUpdate }) {
             <FiImage className="w-8 h-8 text-gray-400" />
           </div>
         )}
-        {product.stock <= 10 && (
+        {product.stock <= (product.minStockThreshold || 10) && (
           <div className="absolute top-2 right-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
             Low Stock
           </div>
@@ -111,6 +144,12 @@ function ProductCard({ product, onUpdate }) {
             <p className="mt-1 text-gray-500">{product.description}</p>
             <p className="mt-2 text-xl font-semibold text-gray-900">{formatCurrency(product.price)}</p>
             <p className="mt-1 text-sm text-gray-500">Stock: {product.stock}</p>
+            {product.category && (
+              <p className="mt-1 text-sm text-gray-500">Category: {product.category}</p>
+            )}
+            {product.supplier && (
+              <p className="mt-1 text-sm text-gray-500">Supplier: {product.supplier}</p>
+            )}
           </>
         )}
 
