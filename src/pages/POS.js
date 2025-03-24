@@ -360,9 +360,9 @@ export default function POS() {
         total: totals.total,
         cashReceived,
         change,
-        paymentMethod: 'cash',
+        paymentMethod: currentPaymentMethod || 'cash',
         cashierId: currentUser.uid,
-        cashierName: currentUser.displayName || currentUser.email,
+        cashierName: currentUser.displayName || currentUser.email || 'Unknown Cashier',
         timestamp: new Date(),
         customer: selectedCustomer || null,
         discountApplied: selectedDiscount ? {

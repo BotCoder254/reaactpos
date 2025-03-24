@@ -10,9 +10,18 @@ export default function ShiftCalendar({ shifts, currentDate, onShiftClick }) {
   });
 
   const getShiftsForDay = (date) => {
-    return shifts.filter(shift => 
-      isSameDay(parseISO(shift.startTime), date)
-    );
+    if (!shifts || !Array.isArray(shifts)) return [];
+    
+    return shifts.filter(shift => {
+      if (!shift.startTime) return false;
+      try {
+        const shiftDate = typeof shift.startTime === 'string' ? parseISO(shift.startTime) : new Date(shift.startTime);
+        return isSameDay(shiftDate, date);
+      } catch (error) {
+        console.error('Error parsing shift date:', error);
+        return false;
+      }
+    });
   };
 
   const timeSlots = Array.from({ length: 24 }, (_, i) => i);
@@ -41,7 +50,7 @@ export default function ShiftCalendar({ shifts, currentDate, onShiftClick }) {
         </div>
 
         {/* Time Grid */}
-        <div className="relative">
+        <div className="space-y-2">
           {timeSlots.map((hour) => (
             <div key={hour} className="grid grid-cols-8 gap-2">
               {/* Time Label */}
@@ -52,8 +61,15 @@ export default function ShiftCalendar({ shifts, currentDate, onShiftClick }) {
               {/* Day Columns */}
               {weekDays.map((day, dayIndex) => {
                 const dayShifts = getShiftsForDay(day).filter(shift => {
-                  const startHour = new Date(shift.startTime).getHours();
-                  return startHour === hour;
+                  try {
+                    const shiftStart = typeof shift.startTime === 'string' 
+                      ? parseISO(shift.startTime) 
+                      : new Date(shift.startTime);
+                    return shiftStart.getHours() === hour;
+                  } catch (error) {
+                    console.error('Error parsing shift start time:', error);
+                    return false;
+                  }
                 });
 
                 return (
@@ -61,7 +77,7 @@ export default function ShiftCalendar({ shifts, currentDate, onShiftClick }) {
                     key={dayIndex}
                     className="h-16 border-t border-gray-100 relative group"
                   >
-                    {dayShifts.map((shift, shiftIndex) => (
+                    {dayShifts.map((shift) => (
                       <motion.div
                         key={shift.id}
                         initial={{ opacity: 0, y: 10 }}
@@ -82,7 +98,7 @@ export default function ShiftCalendar({ shifts, currentDate, onShiftClick }) {
                           </div>
                           <div className="flex items-center space-x-1">
                             <FiUser className="text-gray-500" />
-                            <span className="text-xs">{shift.cashierName}</span>
+                            <span className="text-xs">{shift.cashierName || 'Unknown'}</span>
                           </div>
                         </div>
                       </motion.div>

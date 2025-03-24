@@ -45,6 +45,15 @@ export const createShift = async (shiftData) => {
       status: 'active',
       createdAt: serverTimestamp()
     };
+
+    // Get cashier details
+    const userRef = doc(db, 'users', shiftData.employeeId);
+    const userDoc = await getDoc(userRef);
+    if (userDoc.exists()) {
+      const userData = userDoc.data();
+      formattedData.cashierName = userData.name || userData.email || 'Unknown';
+    }
+
     const docRef = await addDoc(collection(db, 'shifts'), formattedData);
     toast.success('Shift created successfully');
     return docRef.id;
@@ -87,25 +96,51 @@ export const deleteShift = async (shiftId) => {
   }
 };
 
-export const getShifts = async (filters = {}) => {
+export const getShifts = async (startDate, endDate, employeeId = null) => {
   try {
     const shiftsRef = collection(db, 'shifts');
-    let queryRef = query(shiftsRef, orderBy('startTime', 'desc'));
+    let constraints = [orderBy('startTime', 'desc')];
 
-    // Only add filters if they are defined
-    if (filters.status && typeof filters.status === 'string') {
-      queryRef = query(queryRef, where('status', '==', filters.status));
+    if (startDate) {
+      constraints.push(where('startTime', '>=', toFirestoreTimestamp(startDate)));
+    }
+    
+    if (endDate) {
+      constraints.push(where('startTime', '<=', toFirestoreTimestamp(endDate)));
     }
 
-    if (filters.employeeId && typeof filters.employeeId === 'string') {
-      queryRef = query(queryRef, where('employeeId', '==', filters.employeeId));
+    if (employeeId) {
+      constraints.push(where('employeeId', '==', employeeId));
     }
 
+    const queryRef = query(shiftsRef, ...constraints);
     const snapshot = await getDocs(queryRef);
-    return snapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    
+    // Get all unique employee IDs
+    const employeeIds = new Set(snapshot.docs.map(doc => doc.data().employeeId));
+    
+    // Fetch all employee details in one go
+    const employeeDetails = {};
+    if (employeeIds.size > 0) {
+      const usersRef = collection(db, 'users');
+      const usersQuery = query(usersRef, where('uid', 'in', Array.from(employeeIds)));
+      const usersSnapshot = await getDocs(usersQuery);
+      usersSnapshot.docs.forEach(doc => {
+        const userData = doc.data();
+        employeeDetails[doc.id] = userData.name || userData.email || 'Unknown';
+      });
+    }
+
+    return snapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        startTime: data.startTime?.toDate().toISOString(),
+        endTime: data.endTime?.toDate().toISOString(),
+        cashierName: employeeDetails[data.employeeId] || data.cashierName || 'Unknown'
+      };
+    });
   } catch (error) {
     console.error('Error fetching shifts:', error);
     toast.error('Failed to fetch shifts');
