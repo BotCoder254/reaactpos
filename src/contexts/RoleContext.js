@@ -113,13 +113,37 @@ export function RoleProvider({ children }) {
         temporaryRole: null,
         timestamp: serverTimestamp(),
       });
-      setTemporaryRole(null);
-      toast.success('Reverted to original role');
       
-      // Only navigate if the current path requires manager role and user is not a manager
-      const managerOnlyPaths = ['/analytics', '/reports', '/staff-stats', '/sales-goals', '/marketing', '/expenses', '/profit-loss', '/stock', '/low-stock', '/staff', '/discounts', '/inventory-dashboard', '/shift-management', '/role-requests'];
-      if (managerOnlyPaths.includes(window.location.pathname) && baseRole !== 'manager') {
+      // Clear the temporary role first
+      setTemporaryRole(null);
+      
+      // Get current pathname
+      const currentPath = window.location.pathname;
+      
+      // Define manager-only paths
+      const managerOnlyPaths = [
+        '/analytics',
+        '/reports',
+        '/staff-stats',
+        '/sales-goals',
+        '/marketing',
+        '/expenses',
+        '/profit-loss',
+        '/stock',
+        '/low-stock',
+        '/staff',
+        '/discounts',
+        '/inventory-dashboard',
+        '/shift-management',
+        '/role-requests'
+      ];
+
+      // Only navigate if user is on a manager-only path and doesn't have manager as base role
+      if (managerOnlyPaths.some(path => currentPath.startsWith(path)) && baseRole !== 'manager') {
         navigate('/');
+        toast.success('Reverted to original role and redirected to dashboard');
+      } else {
+        toast.success('Reverted to original role');
       }
     } catch (error) {
       console.error('Error reverting role:', error);

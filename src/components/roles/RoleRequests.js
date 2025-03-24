@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiClock, FiCheck, FiX, FiAlertCircle } from 'react-icons/fi';
-import { collection, query, where, onSnapshot, orderBy, doc, setDoc } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, setDoc } from 'firebase/firestore';
 import { db } from '../../firebase';
 import { useRole } from '../../contexts/RoleContext';
 import { format } from 'date-fns';
@@ -17,8 +17,7 @@ export default function RoleRequests() {
   useEffect(() => {
     const q = query(
       collection(db, 'roleRequests'),
-      where('status', '==', 'pending'),
-      orderBy('timestamp', 'desc')
+      where('status', '==', 'pending')
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -26,7 +25,9 @@ export default function RoleRequests() {
         id: doc.id,
         ...doc.data(),
         timestamp: doc.data().timestamp?.toDate(),
-      }));
+      }))
+      .sort((a, b) => b.timestamp - a.timestamp);
+      
       setRequests(newRequests);
     });
 
