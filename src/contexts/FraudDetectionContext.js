@@ -8,8 +8,7 @@ import {
   setDoc, 
   getDocs,
   serverTimestamp,
-  updateDoc,
-  limit
+  getDoc
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
@@ -34,14 +33,38 @@ export function FraudDetectionProvider({ children }) {
   });
   const [loading, setLoading] = useState(true);
 
+  // Load fraud rules on mount
+  useEffect(() => {
+    const loadFraudRules = async () => {
+      try {
+        const rulesRef = doc(db, 'settings', 'fraudRules');
+        const rulesDoc = await getDoc(rulesRef);
+        
+        if (rulesDoc.exists()) {
+          setFraudRules(rulesDoc.data());
+        } else {
+          // Create initial fraud rules document
+          await setDoc(rulesRef, {
+            ...fraudRules,
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp()
+          });
+        }
+      } catch (error) {
+        console.error('Error loading fraud rules:', error);
+        toast.error('Failed to load fraud rules');
+      }
+    };
+
+    loadFraudRules();
+  }, []);
+
   useEffect(() => {
     if (!currentUser) return;
 
-    // Use a simpler query that doesn't require a composite index
     const alertsQuery = query(
       collection(db, 'fraudAlerts'),
-      where('status', '==', 'pending'),
-      limit(100)
+      where('status', '==', 'pending')
     );
 
     const unsubscribe = onSnapshot(alertsQuery, 
@@ -56,7 +79,7 @@ export function FraudDetectionProvider({ children }) {
           });
         });
         // Sort alerts in memory instead of using orderBy
-        alerts.sort((a, b) => b.timestamp - a.timestamp);
+        alerts.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
         setFraudAlerts(alerts);
         setLoading(false);
       },
@@ -70,25 +93,57 @@ export function FraudDetectionProvider({ children }) {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Check transaction against fraud rules
+  const updateFraudRules = async (newRules) => {
+    if (effectiveRole !== 'manager') {
+      toast.error('Only managers can update fraud rules');
+      return;
+    }
+
+    try {
+      if (!newRules || typeof newRules !== 'object') {
+        throw new Error('Invalid rules format');
+      }
+
+      const validatedRules = {
+        transactionThreshold: Number(newRules.transactionThreshold) || fraudRules.transactionThreshold,
+        refundThreshold: Number(newRules.refundThreshold) || fraudRules.refundThreshold,
+        voidThreshold: Number(newRules.voidThreshold) || fraudRules.voidThreshold,
+        suspiciousActivityThreshold: Number(newRules.suspiciousActivityThreshold) || fraudRules.suspiciousActivityThreshold
+      };
+
+      const rulesRef = doc(db, 'settings', 'fraudRules');
+      await setDoc(rulesRef, {
+        ...validatedRules,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+
+      setFraudRules(validatedRules);
+      toast.success('Fraud rules updated successfully');
+    } catch (error) {
+      console.error('Error updating fraud rules:', error);
+      toast.error('Failed to update fraud rules');
+    }
+  };
+
   const checkTransaction = async (transaction) => {
+    if (!transaction || !transaction.amount) return [];
+    
     const flags = [];
 
-    // Check amount threshold
     if (transaction.amount > fraudRules.transactionThreshold) {
       flags.push('High value transaction');
     }
 
-    // Check for multiple transactions
-    const recentTransactions = await getRecentTransactions(transaction.customerId);
-    if (recentTransactions.length > fraudRules.suspiciousActivityThreshold) {
-      flags.push('Multiple transactions in short period');
+    if (transaction.customerId) {
+      const recentTransactions = await getRecentTransactions(transaction.customerId);
+      if (recentTransactions.length > fraudRules.suspiciousActivityThreshold) {
+        flags.push('Multiple transactions in short period');
+      }
     }
 
     return flags;
   };
 
-  // Get recent transactions for a customer
   const getRecentTransactions = async (customerId) => {
     if (!customerId) return [];
 
@@ -108,7 +163,6 @@ export function FraudDetectionProvider({ children }) {
     }));
   };
 
-  // Flag a transaction as suspicious
   const flagTransaction = async (transactionId, reason) => {
     if (!transactionId || !reason) {
       toast.error('Transaction ID and reason are required');
@@ -124,7 +178,6 @@ export function FraudDetectionProvider({ children }) {
         flaggedAt: serverTimestamp()
       }, { merge: true });
 
-      // Create fraud alert
       const alertRef = doc(collection(db, 'fraudAlerts'));
       await setDoc(alertRef, {
         transactionId,
@@ -141,43 +194,6 @@ export function FraudDetectionProvider({ children }) {
     }
   };
 
-  // Update fraud detection rules (manager only)
-  const updateFraudRules = async (newRules) => {
-    if (effectiveRole !== 'manager') {
-      toast.error('Only managers can update fraud rules');
-      return;
-    }
-
-    try {
-      // Validate rules before updating
-      if (!newRules || typeof newRules !== 'object') {
-        throw new Error('Invalid rules format');
-      }
-
-      // Ensure all required fields are numbers and not undefined
-      const validatedRules = {
-        transactionThreshold: Number(newRules.transactionThreshold) || fraudRules.transactionThreshold,
-        refundThreshold: Number(newRules.refundThreshold) || fraudRules.refundThreshold,
-        voidThreshold: Number(newRules.voidThreshold) || fraudRules.voidThreshold,
-        suspiciousActivityThreshold: Number(newRules.suspiciousActivityThreshold) || fraudRules.suspiciousActivityThreshold
-      };
-
-      const rulesRef = doc(db, 'settings', 'fraudRules');
-      await updateDoc(rulesRef, {
-        ...validatedRules,
-        updatedAt: serverTimestamp()
-      });
-
-      setFraudRules(validatedRules);
-      toast.success('Fraud rules updated successfully');
-    } catch (error) {
-      console.error('Error updating fraud rules:', error);
-      toast.error('Failed to update fraud rules');
-      throw error;
-    }
-  };
-
-  // Resolve fraud alert
   const resolveFraudAlert = async (alertId, resolution) => {
     try {
       if (!alertId || !resolution) {
@@ -185,17 +201,17 @@ export function FraudDetectionProvider({ children }) {
       }
 
       const alertRef = doc(db, 'fraudAlerts', alertId);
-      await updateDoc(alertRef, {
+      await setDoc(alertRef, {
         status: 'resolved',
         resolution,
-        resolvedAt: serverTimestamp()
-      });
+        resolvedAt: serverTimestamp(),
+        resolvedBy: currentUser?.uid
+      }, { merge: true });
 
       toast.success('Fraud alert resolved');
     } catch (error) {
       console.error('Error resolving fraud alert:', error);
       toast.error('Failed to resolve fraud alert');
-      throw error;
     }
   };
 
