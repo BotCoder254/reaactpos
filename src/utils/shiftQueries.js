@@ -117,28 +117,43 @@ export const getShifts = async (startDate, endDate, employeeId = null) => {
     const snapshot = await getDocs(queryRef);
     
     // Get all unique employee IDs
-    const employeeIds = new Set(snapshot.docs.map(doc => doc.data().employeeId));
+    const employeeIds = new Set();
+    snapshot.docs.forEach(doc => {
+      const data = doc.data();
+      if (data.employeeId) employeeIds.add(data.employeeId);
+    });
     
-    // Fetch all employee details in one go
+    // Fetch all employee details in one batch
     const employeeDetails = {};
     if (employeeIds.size > 0) {
-      const usersRef = collection(db, 'users');
-      const usersQuery = query(usersRef, where('uid', 'in', Array.from(employeeIds)));
-      const usersSnapshot = await getDocs(usersQuery);
-      usersSnapshot.docs.forEach(doc => {
-        const userData = doc.data();
-        employeeDetails[doc.id] = userData.name || userData.email || 'Unknown';
+      const userPromises = Array.from(employeeIds).map(id => 
+        getDoc(doc(db, 'users', id))
+      );
+      
+      const userDocs = await Promise.all(userPromises);
+      userDocs.forEach(userDoc => {
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          employeeDetails[userDoc.id] = {
+            name: userData.name || userData.displayName || '',
+            email: userData.email || '',
+            id: userDoc.id
+          };
+        }
       });
     }
 
     return snapshot.docs.map(doc => {
       const data = doc.data();
+      const employeeDetail = employeeDetails[data.employeeId] || {};
       return {
         id: doc.id,
         ...data,
         startTime: data.startTime?.toDate().toISOString(),
         endTime: data.endTime?.toDate().toISOString(),
-        cashierName: employeeDetails[data.employeeId] || data.cashierName || 'Unknown'
+        cashierName: employeeDetail.name || data.cashierName || 'Unknown',
+        cashierEmail: employeeDetail.email || data.cashierEmail,
+        employeeId: data.employeeId
       };
     });
   } catch (error) {
@@ -154,15 +169,59 @@ export const clockIn = async (shiftId, cashierId) => {
     if (!shiftId || !cashierId) {
       throw new Error('ShiftId and CashierId are required');
     }
+
+    // Verify shift exists and is active
+    const shiftRef = doc(db, 'shifts', shiftId);
+    const shiftDoc = await getDoc(shiftRef);
+    
+    if (!shiftDoc.exists()) {
+      throw new Error('Shift not found');
+    }
+
+    const shiftData = shiftDoc.data();
+    if (shiftData.status !== 'active') {
+      throw new Error('Cannot clock in to an inactive shift');
+    }
+
+    // Verify cashier exists and get details
+    const cashierRef = doc(db, 'users', cashierId);
+    const cashierDoc = await getDoc(cashierRef);
+    
+    if (!cashierDoc.exists()) {
+      throw new Error('Cashier not found');
+    }
+
+    const cashierData = cashierDoc.data();
+
+    // Check if already clocked in
+    const existingAttendanceQuery = query(
+      collection(db, 'attendance'),
+      where('shiftId', '==', shiftId),
+      where('cashierId', '==', cashierId),
+      where('status', '==', 'active')
+    );
+    
+    const existingAttendance = await getDocs(existingAttendanceQuery);
+    if (!existingAttendance.empty) {
+      throw new Error('Already clocked in for this shift');
+    }
+
+    // Create attendance record with full cashier details
     const attendanceRef = await addDoc(collection(db, 'attendance'), {
       shiftId,
       cashierId,
       clockInTime: serverTimestamp(),
-      status: 'active'
+      status: 'active',
+      cashierName: cashierData.name || cashierData.displayName || 'Unknown',
+      cashierEmail: cashierData.email,
+      createdAt: serverTimestamp()
     });
+
+    toast.success('Successfully clocked in');
     return attendanceRef.id;
   } catch (error) {
     console.error('Error clocking in:', error);
+    toast.error(error.message || 'Failed to clock in');
     throw error;
   }
 };
@@ -447,7 +506,6 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Cashier Management
 export const getCashiers = async () => {
   try {
-    // Return cached data if available and not expired
     if (cashiersCache && lastCashiersFetch && (Date.now() - lastCashiersFetch) < CACHE_DURATION) {
       return cashiersCache;
     }
@@ -460,19 +518,17 @@ export const getCashiers = async () => {
     const querySnapshot = await getDocs(q);
     const cashiers = querySnapshot.docs.map(doc => ({
       id: doc.id,
-      name: doc.data().name || 'Unknown',
-      email: doc.data().email,
+      name: doc.data().name || doc.data().displayName || 'Unknown',
+      email: doc.data().email || '',
       role: doc.data().role
     }));
 
-    // Update cache
     cashiersCache = cashiers;
     lastCashiersFetch = Date.now();
 
     return cashiers;
   } catch (error) {
     console.error('Error getting cashiers:', error);
-    // Return cached data if available, even if expired
     if (cashiersCache) {
       return cashiersCache;
     }

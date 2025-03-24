@@ -146,9 +146,9 @@ function AppContent() {
               <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
               <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
               <Route path="/discounts" element={
-                <PrivateRoute>
+                  <PrivateRoute>
                   {userRole === 'manager' ? <Discounts /> : <Navigate to="/" replace />}
-                </PrivateRoute>
+                  </PrivateRoute>
               } />
             </Routes>
           </div>
@@ -166,19 +166,19 @@ export default function App() {
       <AuthProvider>
         <RoleProvider>
           <FraudDetectionProvider>
-            <SalesGoalsProvider>
-              <HeldTransactionsProvider>
-                <RefundProvider>
-                  <LoyaltyProvider>
-                    <InventoryProvider>
+        <SalesGoalsProvider>
+          <HeldTransactionsProvider>
+            <RefundProvider>
+              <LoyaltyProvider>
+                <InventoryProvider>
                       <ShiftProvider>
-                        <AppContent />
+                  <AppContent />
                       </ShiftProvider>
-                    </InventoryProvider>
-                  </LoyaltyProvider>
-                </RefundProvider>
-              </HeldTransactionsProvider>
-            </SalesGoalsProvider>
+                </InventoryProvider>
+              </LoyaltyProvider>
+            </RefundProvider>
+          </HeldTransactionsProvider>
+        </SalesGoalsProvider>
           </FraudDetectionProvider>
         </RoleProvider>
       </AuthProvider>

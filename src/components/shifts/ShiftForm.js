@@ -129,7 +129,7 @@ export default function ShiftForm({ shift, onClose, onSuccess }) {
                       setFormData({
                         ...formData,
                         employeeId: e.target.value,
-                        cashierName: cashier ? cashier.name : ''
+                        cashierName: cashier ? (cashier.name || cashier.email) : ''
                       });
                     }}
                     className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-primary-500 focus:border-primary-500"
@@ -138,7 +138,7 @@ export default function ShiftForm({ shift, onClose, onSuccess }) {
                     <option value="">Select a cashier</option>
                     {cashiers.map(cashier => (
                       <option key={cashier.id} value={cashier.id}>
-                        {cashier.name || cashier.email}
+                        {cashier.name !== 'Unknown' ? `${cashier.name} (${cashier.email})` : cashier.email}
                       </option>
                     ))}
                   </select>

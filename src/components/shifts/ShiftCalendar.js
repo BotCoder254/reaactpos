@@ -98,7 +98,16 @@ export default function ShiftCalendar({ shifts, currentDate, onShiftClick }) {
                           </div>
                           <div className="flex items-center space-x-1">
                             <FiUser className="text-gray-500" />
-                            <span className="text-xs">{shift.cashierName || 'Unknown'}</span>
+                            <span 
+                              className="text-xs" 
+                              title={shift.cashierEmail}
+                            >
+                              {shift.cashierName !== 'Unknown' 
+                                ? shift.cashierName 
+                                : shift.cashierEmail 
+                                  ? shift.cashierEmail.split('@')[0] 
+                                  : 'Unknown'}
+                            </span>
                           </div>
                         </div>
                       </motion.div>
