@@ -5,7 +5,7 @@ import { FiClock, FiCheck, FiX } from 'react-icons/fi';
 import { clockIn, clockOut } from '../../utils/shiftQueries';
 import toast from 'react-hot-toast';
 
-export default function AttendanceLog({ attendance, shifts, userRole }) {
+export default function AttendanceLog({ attendance = [], shifts = [], userRole }) {
   const handleClockIn = async (shiftId) => {
     try {
       await clockIn(shiftId);
@@ -26,6 +26,17 @@ export default function AttendanceLog({ attendance, shifts, userRole }) {
     }
   };
 
+  // Filter today's shifts
+  const today = new Date();
+  const todaysShifts = shifts.filter(shift => {
+    const shiftDate = new Date(shift.startTime);
+    return (
+      shiftDate.getDate() === today.getDate() &&
+      shiftDate.getMonth() === today.getMonth() &&
+      shiftDate.getFullYear() === today.getFullYear()
+    );
+  });
+
   return (
     <div className="space-y-6">
       {/* Today's Shifts */}
@@ -33,33 +44,34 @@ export default function AttendanceLog({ attendance, shifts, userRole }) {
         <h3 className="text-lg font-medium text-gray-900 mb-4">Today's Shifts</h3>
         <div className="bg-white rounded-lg shadow overflow-hidden">
           <ul className="divide-y divide-gray-200">
-            {shifts.map((shift) => {
-              const attendanceRecord = attendance.find(a => a.shiftId === shift.id);
-              const isActive = attendanceRecord?.status === 'active';
+            {todaysShifts.length > 0 ? (
+              todaysShifts.map((shift) => {
+                const attendanceRecord = attendance.find(a => a.shiftId === shift.id);
+                const isActive = attendanceRecord?.status === 'active';
 
-              return (
-                <motion.li
-                  key={shift.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-4">
-                      <div className={`w-2 h-2 rounded-full ${
-                        isActive ? 'bg-green-500' : 'bg-gray-300'
-                      }`} />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {shift.cashierName}
-                        </p>
-                        <div className="flex items-center text-sm text-gray-500">
-                          <FiClock className="mr-1" />
-                          {format(new Date(shift.startTime), 'h:mm a')} - {format(new Date(shift.endTime), 'h:mm a')}
+                return (
+                  <motion.li
+                    key={shift.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-4">
+                        <div className={`w-2 h-2 rounded-full ${
+                          isActive ? 'bg-green-500' : 'bg-gray-300'
+                        }`} />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {shift.cashierName || 'Unknown Cashier'}
+                          </p>
+                          <div className="flex items-center text-sm text-gray-500">
+                            <FiClock className="mr-1" />
+                            {format(new Date(shift.startTime), 'h:mm a')} - {format(new Date(shift.endTime), 'h:mm a')}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                    {userRole === 'cashier' && (
+                      
                       <div>
                         {!attendanceRecord ? (
                           <button
@@ -84,12 +96,11 @@ export default function AttendanceLog({ attendance, shifts, userRole }) {
                           </span>
                         )}
                       </div>
-                    )}
-                  </div>
-                </motion.li>
-              );
-            })}
-            {shifts.length === 0 && (
+                    </div>
+                  </motion.li>
+                );
+              })
+            ) : (
               <li className="p-4 text-center text-gray-500">
                 No shifts scheduled for today
               </li>
@@ -123,42 +134,43 @@ export default function AttendanceLog({ attendance, shifts, userRole }) {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {attendance.map((record) => {
-                const shift = shifts.find(s => s.id === record.shiftId);
-                
-                return (
-                  <motion.tr
-                    key={record.id}
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                  >
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {format(new Date(record.clockInTime), 'MMM d, yyyy')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {shift?.cashierName}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {format(new Date(record.clockInTime), 'h:mm a')}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {record.clockOutTime
-                        ? format(new Date(record.clockOutTime), 'h:mm a')
-                        : '-'}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        record.status === 'active'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-gray-100 text-gray-800'
-                      }`}>
-                        {record.status === 'active' ? 'Active' : 'Completed'}
-                      </span>
-                    </td>
-                  </motion.tr>
-                );
-              })}
-              {attendance.length === 0 && (
+              {attendance.length > 0 ? (
+                attendance.map((record) => {
+                  const shift = shifts.find(s => s.id === record.shiftId);
+                  
+                  return (
+                    <motion.tr
+                      key={record.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                    >
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {format(new Date(record.clockInTime), 'MMM d, yyyy')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {shift?.cashierName || 'Unknown Cashier'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {format(new Date(record.clockInTime), 'h:mm a')}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                        {record.clockOutTime
+                          ? format(new Date(record.clockOutTime), 'h:mm a')
+                          : '-'}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          record.status === 'active'
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-gray-100 text-gray-800'
+                        }`}>
+                          {record.status === 'active' ? 'Active' : 'Completed'}
+                        </span>
+                      </td>
+                    </motion.tr>
+                  );
+                })
+              ) : (
                 <tr>
                   <td colSpan="5" className="px-6 py-4 text-center text-gray-500">
                     No attendance records found

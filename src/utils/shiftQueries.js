@@ -272,13 +272,21 @@ export const getShiftAnalytics = async (startDate, endDate) => {
     const shiftsSnapshot = await getDocs(q);
     
     const shifts = shiftsSnapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          startTime: data.startTime?.toDate(),
+          endTime: data.endTime?.toDate()
+        };
+      })
       .filter(shift => {
+        if (!shift.startTime) return false;
         const shiftStart = new Date(shift.startTime);
-        return shiftStart >= startDate && shiftStart <= endDate;
+        const filterStart = new Date(startDate);
+        const filterEnd = new Date(endDate);
+        return shiftStart >= filterStart && shiftStart <= filterEnd;
       });
 
     // Get attendance data
@@ -286,37 +294,84 @@ export const getShiftAnalytics = async (startDate, endDate) => {
     const attendanceSnapshot = await getDocs(attendanceQuery);
     
     const attendance = attendanceSnapshot.docs
-      .map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }))
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          clockInTime: data.clockInTime?.toDate(),
+          clockOutTime: data.clockOutTime?.toDate()
+        };
+      })
       .filter(record => {
+        if (!record.clockInTime) return false;
         const recordTime = new Date(record.clockInTime);
-        return recordTime >= startDate && recordTime <= endDate;
+        const filterStart = new Date(startDate);
+        const filterEnd = new Date(endDate);
+        return recordTime >= filterStart && recordTime <= filterEnd;
       });
+
+    // Get previous period data for comparison
+    const previousStart = new Date(startDate);
+    previousStart.setDate(previousStart.getDate() - 7); // One week before
+    const previousEnd = new Date(endDate);
+    previousEnd.setDate(previousEnd.getDate() - 7);
+
+    const previousShifts = shiftsSnapshot.docs
+      .map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          startTime: data.startTime?.toDate(),
+          endTime: data.endTime?.toDate()
+        };
+      })
+      .filter(shift => {
+        if (!shift.startTime) return false;
+        const shiftStart = new Date(shift.startTime);
+        return shiftStart >= previousStart && shiftStart <= previousEnd;
+      });
+
+    // Calculate changes from previous period
+    const previousTotalShifts = previousShifts.length || 1; // Avoid division by zero
+    const shiftChange = ((shifts.length - previousTotalShifts) / previousTotalShifts) * 100;
+
+    const previousTotalHours = previousShifts.reduce((acc, shift) => {
+      if (!shift.startTime || !shift.endTime) return acc;
+      return acc + (shift.endTime - shift.startTime) / (1000 * 60 * 60);
+    }, 0);
+    const currentTotalHours = shifts.reduce((acc, shift) => {
+      if (!shift.startTime || !shift.endTime) return acc;
+      return acc + (shift.endTime - shift.startTime) / (1000 * 60 * 60);
+    }, 0);
+    const hoursChange = previousTotalHours ? ((currentTotalHours - previousTotalHours) / previousTotalHours) * 100 : 0;
 
     // Process data for analytics
     const analytics = {
       totalShifts: shifts.length,
-      totalHours: shifts.reduce((acc, shift) => {
-        const start = new Date(shift.startTime);
-        const end = new Date(shift.endTime);
-        return acc + (end - start) / (1000 * 60 * 60);
-      }, 0),
-      attendanceRate: (attendance.length / shifts.length) * 100,
+      totalHours: currentTotalHours,
+      attendanceRate: shifts.length ? (attendance.length / shifts.length) * 100 : 0,
       shiftsPerDay: {},
-      peakHours: {}
+      peakHours: {},
+      changes: {
+        shifts: shiftChange.toFixed(2),
+        hours: hoursChange.toFixed(2),
+        attendance: 0 // Will be calculated below
+      }
     };
 
     // Calculate shifts per day
     shifts.forEach(shift => {
-      const date = new Date(shift.startTime).toLocaleDateString();
+      if (!shift.startTime) return;
+      const date = shift.startTime.toLocaleDateString();
       analytics.shiftsPerDay[date] = (analytics.shiftsPerDay[date] || 0) + 1;
     });
 
     // Calculate peak hours
     shifts.forEach(shift => {
-      const hour = new Date(shift.startTime).getHours();
+      if (!shift.startTime) return;
+      const hour = shift.startTime.getHours();
       analytics.peakHours[hour] = (analytics.peakHours[hour] || 0) + 1;
     });
 

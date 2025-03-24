@@ -17,33 +17,45 @@ export default function ShiftAnalytics({ analytics }) {
     ? peakHourEntries.reduce((a, b) => a[1] > b[1] ? a : b)[0] + ':00'
     : 'N/A';
 
+  const formatChange = (value) => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue)) return '0%';
+    return `${numValue > 0 ? '+' : ''}${numValue.toFixed(1)}%`;
+  };
+
+  const getChangeType = (value) => {
+    const numValue = parseFloat(value);
+    if (isNaN(numValue) || numValue === 0) return 'neutral';
+    return numValue > 0 ? 'positive' : 'negative';
+  };
+
   const stats = [
     {
       name: 'Total Shifts',
       value: analytics.totalShifts || 0,
       icon: FiCalendar,
-      change: '+4.75%',
-      changeType: 'positive'
+      change: formatChange(analytics.changes?.shifts || 0),
+      changeType: getChangeType(analytics.changes?.shifts)
     },
     {
       name: 'Total Hours',
       value: `${Math.round(analytics.totalHours || 0)}h`,
       icon: FiClock,
-      change: '+1.23%',
-      changeType: 'positive'
+      change: formatChange(analytics.changes?.hours || 0),
+      changeType: getChangeType(analytics.changes?.hours)
     },
     {
       name: 'Attendance Rate',
       value: `${Math.round(analytics.attendanceRate || 0)}%`,
       icon: FiUsers,
-      change: '-0.32%',
-      changeType: 'negative'
+      change: formatChange(analytics.changes?.attendance || 0),
+      changeType: getChangeType(analytics.changes?.attendance)
     },
     {
       name: 'Peak Hour',
       value: peakHour,
       icon: FiTrendingUp,
-      change: 'No change',
+      change: 'Current period',
       changeType: 'neutral'
     }
   ];
@@ -111,7 +123,7 @@ export default function ShiftAnalytics({ analytics }) {
                 >
                   <div className="px-2 py-1 text-xs text-center">
                     <div className="font-medium text-primary-700">{count}</div>
-                    <div className="text-gray-500">{date}</div>
+                    <div className="text-gray-500">{new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
                   </div>
                 </motion.div>
               ))}
@@ -140,7 +152,7 @@ export default function ShiftAnalytics({ analytics }) {
                 >
                   <div className="px-1 py-1 text-xs text-center">
                     <div className="font-medium text-primary-700">{count}</div>
-                    <div className="text-gray-500">{hour}:00</div>
+                    <div className="text-gray-500">{`${hour.padStart(2, '0')}:00`}</div>
                   </div>
                 </motion.div>
               ))}
