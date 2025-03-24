@@ -19,6 +19,7 @@ import {
   ArchiveBoxIcon,
   InboxStackIcon,
   ExclamationCircleIcon,
+  CalendarIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar } from 'react-icons/fi';
@@ -46,7 +47,7 @@ export default function Sidebar() {
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
     { name: 'Staff', icon: UsersIcon, path: '/staff' },
     { name: 'Staff Stats', icon: ChartPieIcon, path: '/staff-stats' },
-    // { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
+    { name: 'Shift Management', icon: CalendarIcon, path: '/shifts' },
     { name: 'Discounts', icon: TagIcon, path: '/discounts' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Expenses', icon: ChartBarIcon, path: '/expenses' },
@@ -67,6 +68,7 @@ export default function Sidebar() {
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
+    { name: 'Shift Management', icon: CalendarIcon, path: '/shifts' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Loyalty Program', icon: FiStar, path: '/loyalty' },

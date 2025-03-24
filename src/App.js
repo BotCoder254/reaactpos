@@ -14,6 +14,7 @@ import { HeldTransactionsProvider } from './contexts/HeldTransactionsContext';
 import { RefundProvider } from './contexts/RefundContext';
 import { LoyaltyProvider } from './contexts/LoyaltyContext';
 import { InventoryProvider } from './contexts/InventoryContext';
+import { ShiftProvider } from './contexts/ShiftContext';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -36,6 +37,7 @@ import Inventory from './pages/Inventory';
 import StockManagement from './pages/StockManagement';
 import LowStockAlerts from './pages/LowStockAlerts';
 import InventoryDashboard from './components/inventory/InventoryDashboard';
+import ShiftManagement from './pages/ShiftManagement';
 
 function AppContent() {
   const location = useLocation();
@@ -71,6 +73,7 @@ function AppContent() {
               <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
               <Route path="/staff" element={<PrivateRoute><Staff /></PrivateRoute>} />
               <Route path="/staff-stats" element={<PrivateRoute><StaffStats /></PrivateRoute>} />
+              <Route path="/shifts" element={<PrivateRoute><ShiftManagement /></PrivateRoute>} />
               <Route path="/discounts" element={<PrivateRoute><Discounts /></PrivateRoute>} />
               <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
               <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
@@ -112,7 +115,9 @@ function App() {
             <RefundProvider>
               <LoyaltyProvider>
                 <InventoryProvider>
-                  <AppContent />
+                  <ShiftProvider>
+                    <AppContent />
+                  </ShiftProvider>
                 </InventoryProvider>
               </LoyaltyProvider>
             </RefundProvider>
