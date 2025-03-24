@@ -4,7 +4,7 @@ import { useSalesGoals } from '../../contexts/SalesGoalsContext';
 import { useAuth } from '../../contexts/AuthContext';
 
 const SalesGoals = () => {
-  const { goals, updateGoal, loading, error } = useSalesGoals();
+  const { goals, updateGoal, loading, error } = useSalesGoals() || {};
   const { userRole } = useAuth();
   const [editMode, setEditMode] = useState(null);
   const [tempTarget, setTempTarget] = useState('');
@@ -12,7 +12,7 @@ const SalesGoals = () => {
   const handleEdit = (period) => {
     if (userRole !== 'manager') return;
     setEditMode(period);
-    setTempTarget(goals[period].target.toString());
+    setTempTarget(goals?.[period]?.target?.toString() || '0');
   };
 
   const handleSave = async (period) => {
@@ -20,12 +20,12 @@ const SalesGoals = () => {
     if (!tempTarget || isNaN(parseFloat(tempTarget)) || parseFloat(tempTarget) < 0) {
       return;
     }
-    await updateGoal(period, parseFloat(tempTarget));
+    await updateGoal?.(period, parseFloat(tempTarget));
     setEditMode(null);
   };
 
   const calculateProgress = (achieved, target) => {
-    if (target === 0) return 0;
+    if (!target || target === 0) return 0;
     return Math.min((achieved / target) * 100, 100);
   };
 
@@ -63,8 +63,18 @@ const SalesGoals = () => {
     );
   }
 
+  if (!goals) {
+    return (
+      <div className="p-4">
+        <div className="bg-yellow-50 border border-yellow-200 text-yellow-600 px-4 py-3 rounded">
+          No sales goals data available.
+        </div>
+      </div>
+    );
+  }
+
   const renderGoalSection = (period) => {
-    const { target, achieved } = goals[period];
+    const { target = 0, achieved = 0 } = goals[period] || {};
     const progress = calculateProgress(achieved, target);
 
     return (
@@ -113,8 +123,8 @@ const SalesGoals = () => {
             custom={progress}
           />
         </div>
-        <div className="mt-1 text-right text-sm text-gray-600">
-          {progress.toFixed(1)}%
+        <div className="mt-1 text-sm text-gray-600">
+          {progress.toFixed(1)}% Complete
         </div>
       </div>
     );

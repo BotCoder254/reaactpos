@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect } from 'react';
 import { 
   auth,
   db 
-} from '../config/firebase';
+} from '../firebase';
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,

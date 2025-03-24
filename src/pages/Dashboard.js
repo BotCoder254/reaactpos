@@ -42,100 +42,106 @@ export default function Dashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100">
-      {/* Navigation */}
-      <nav className="bg-white shadow-lg">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-primary-600">POS System</h1>
-            </div>
-            <div className="flex items-center space-x-4">
-              <div className="flex items-center space-x-2">
-                <FiUser className="text-gray-600" />
-                <span className="text-sm text-gray-600">{currentUser?.email}</span>
-                <span className="text-xs bg-primary-100 text-primary-800 px-2 py-1 rounded-full">
-                  {userRole}
-                </span>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-              >
-                <FiLogOut className="mr-2" />
-                Logout
-              </button>
-            </div>
+    <motion.div
+      variants={containerVariants}
+      initial="hidden"
+      animate="visible"
+      className="container mx-auto px-4 py-6"
+    >
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <div className="flex items-center space-x-4">
+          <div className="flex items-center">
+            <FiUser className="h-5 w-5 text-gray-500 mr-2" />
+            <span className="text-sm text-gray-600">
+              {currentUser?.email} ({userRole})
+            </span>
           </div>
-        </div>
-      </nav>
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded"
-            role="alert"
+          <button
+            onClick={handleLogout}
+            className="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
           >
-            {error}
-          </motion.div>
-        )}
+            <FiLogOut className="mr-2 -ml-1 h-4 w-4" />
+            Logout
+          </button>
+        </div>
+      </div>
 
-        {/* Quick Action Button for Cashiers */}
-        {userRole === 'cashier' && (
+      {error && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded"
+          role="alert"
+        >
+          {error}
+        </motion.div>
+      )}
+
+      {/* Quick Action Button for Cashiers */}
+      {userRole === 'cashier' && (
+        <motion.div
+          variants={itemVariants}
+          className="mb-6"
+        >
+          <button
+            onClick={() => navigate('/pos')}
+            className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
+          >
+            <FiPlus className="mr-2" />
+            New Sale
+          </button>
+        </motion.div>
+      )}
+
+      {/* Stats Section */}
+      <motion.div
+        variants={itemVariants}
+        className="mb-6"
+      >
+        <Stats />
+      </motion.div>
+
+      {/* Manager-specific content */}
+      {userRole === 'manager' && (
+        <>
+          {/* Sales Goals */}
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
+            variants={itemVariants}
             className="mb-6"
           >
-            <button
-              onClick={() => navigate('/pos')}
-              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500"
-            >
-              <FiPlus className="mr-2" />
-              New Sale
-            </button>
+            <SalesGoals />
           </motion.div>
-        )}
 
-        {/* Stats Section */}
-        <div className="mb-6">
-          <Stats />
-        </div>
+          {/* Sales Chart */}
+          <motion.div
+            variants={itemVariants}
+            className="mb-6"
+          >
+            <SalesChart />
+          </motion.div>
 
-        {/* Manager-specific content */}
-        {userRole === 'manager' && (
-          <>
-            {/* Sales Goals */}
-            <motion.div
-              variants={itemVariants}
-              className="mb-6"
-            >
-              <SalesGoals />
-            </motion.div>
-
-            {/* Sales Chart */}
-            <div className="mb-6">
-              <SalesChart />
-            </div>
-
-            {/* Two-column layout for transactions and inventory */}
-            <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          {/* Two-column layout for transactions and inventory */}
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <motion.div variants={itemVariants}>
               <RecentTransactions />
+            </motion.div>
+            <motion.div variants={itemVariants}>
               <LowStockAlert />
-            </div>
-          </>
-        )}
-
-        {/* Cashier-specific content */}
-        {userRole === 'cashier' && (
-          <div className="grid grid-cols-1 gap-6">
-            <RecentTransactions />
+            </motion.div>
           </div>
-        )}
-      </main>
-    </div>
+        </>
+      )}
+
+      {/* Cashier-specific content */}
+      {userRole === 'cashier' && (
+        <motion.div
+          variants={itemVariants}
+          className="mt-6"
+        >
+          <RecentTransactions />
+        </motion.div>
+      )}
+    </motion.div>
   );
 } 

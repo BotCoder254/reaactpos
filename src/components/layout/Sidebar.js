@@ -22,12 +22,18 @@ import {
   CalendarIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
-import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar } from 'react-icons/fi';
+import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus } from 'react-icons/fi';
+import { useRole } from '../../contexts/RoleContext';
+import { classNames } from '../../utils/classNames';
+import { NavLink } from 'react-router-dom';
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { currentUser, userRole } = useAuth();
   const location = useLocation();
+  const roleContext = useRole();
+  const effectiveRole = roleContext?.effectiveRole || userRole;
+  const isTemporaryRole = roleContext?.isTemporaryRole || false;
 
   // If user is not authenticated, don't render the sidebar
   if (!currentUser) return null;
@@ -37,9 +43,9 @@ export default function Sidebar() {
     { name: 'POS', icon: ShoppingCartIcon, path: '/pos' },
     { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
     { name: 'Inventory', icon: ArchiveBoxIcon, path: '/inventory' },
-    { name: 'Inventory Dashboard', icon: ChartBarIcon, path: '/inventory/dashboard' },
-    { name: 'Stock Management', icon: InboxStackIcon, path: '/inventory/stock' },
-    { name: 'Low Stock Alerts', icon: ExclamationCircleIcon, path: '/inventory/alerts' },
+    { name: 'Inventory Dashboard', icon: ArchiveBoxIcon, path: '/inventory-dashboard' },
+    { name: 'Stock Management', icon: InboxStackIcon, path: '/stock' },
+    { name: 'Low Stock Alerts', icon: ExclamationCircleIcon, path: '/low-stock' },
     { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },
@@ -47,7 +53,8 @@ export default function Sidebar() {
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
     { name: 'Staff', icon: UsersIcon, path: '/staff' },
     { name: 'Staff Stats', icon: ChartPieIcon, path: '/staff-stats' },
-    { name: 'Shift Management', icon: CalendarIcon, path: '/shifts' },
+    { name: 'Shift Management', icon: CalendarIcon, path: '/shift-management' },
+    { name: 'Role Requests', icon: UserGroupIcon, path: '/role-requests' },
     { name: 'Discounts', icon: TagIcon, path: '/discounts' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Expenses', icon: ChartBarIcon, path: '/expenses' },
@@ -63,40 +70,36 @@ export default function Sidebar() {
     { name: 'POS', icon: ShoppingCartIcon, path: '/pos' },
     { name: 'Products', icon: ShoppingBagIcon, path: '/products' },
     { name: 'Inventory', icon: ArchiveBoxIcon, path: '/inventory' },
-    { name: 'Inventory Dashboard', icon: ChartBarIcon, path: '/inventory/dashboard' },
     { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
-    { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
-    { name: 'Shift Management', icon: CalendarIcon, path: '/shifts' },
-    { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Loyalty Program', icon: FiStar, path: '/loyalty' },
     { name: 'Settings', icon: CogIcon, path: '/settings' },
-    { name: 'Refunds', icon: FiRefreshCcw, path: '/refunds' }
+    { name: 'Refund Request', icon: FiRefreshCcw, path: '/refunds' }
   ];
 
-  const navItems = userRole === 'manager' ? managerNavItems : cashierNavItems;
+  const navItems = effectiveRole === 'manager' ? managerNavItems : cashierNavItems;
 
   return (
     <motion.div
       initial={false}
       animate={{ width: isCollapsed ? '5rem' : '16rem' }}
-      className="h-screen bg-white border-r border-gray-200 flex flex-col"
+      className="fixed inset-y-0 left-0 z-30 bg-white border-r border-gray-200 flex flex-col h-screen overflow-hidden"
     >
-      <div className="p-4 flex items-center justify-between">
+      <div className="p-4 flex items-center justify-between shrink-0">
         {!isCollapsed && (
           <motion.h1
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-xl font-bold text-primary-600"
+            className="text-xl font-bold text-primary-600 truncate"
           >
             POS System
           </motion.h1>
         )}
         <button
           onClick={() => setIsCollapsed(!isCollapsed)}
-          className="p-2 rounded-lg hover:bg-gray-100"
+          className="p-2 rounded-lg hover:bg-gray-100 shrink-0"
         >
           <svg
             className="w-6 h-6 text-gray-600"
@@ -118,57 +121,71 @@ export default function Sidebar() {
         </button>
       </div>
 
-      <nav className="flex-1 overflow-y-auto">
-        <ul className="p-2 space-y-1">
-          {navItems.map((item) => {
-            const isActive = location.pathname === item.path;
-            return (
-              <li key={item.name}>
-                <Link
-                  to={item.path}
-                  className={`flex items-center px-3 py-2 rounded-lg transition-colors ${
-                    isActive
-                      ? 'bg-primary-50 text-primary-600'
-                      : 'text-gray-600 hover:bg-gray-50'
-                  }`}
-                >
-                  <item.icon className="w-6 h-6 flex-shrink-0" />
-                  {!isCollapsed && (
-                    <motion.span
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      className="ml-3 font-medium"
-                    >
-                      {item.name}
-                    </motion.span>
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <div className="flex-1 flex flex-col overflow-y-auto min-h-0">
+        <nav className="flex-1 px-2 py-4 space-y-1">
+          {navItems.map((item) => (
+            <NavLink
+              key={item.name}
+              to={item.path}
+              className={({ isActive }) =>
+                classNames(
+                  isActive
+                    ? 'bg-primary-100 text-primary-900'
+                    : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900',
+                  'group flex items-center px-2 py-2 text-sm font-medium rounded-md whitespace-nowrap'
+                )
+              }
+            >
+              <item.icon
+                className={classNames(
+                  'flex-shrink-0 h-6 w-6',
+                  isTemporaryRole ? 'text-yellow-500' : 'text-primary-500'
+                )}
+              />
+              {!isCollapsed && (
+                <span className="ml-3 truncate">{item.name}</span>
+              )}
+              {!isCollapsed && item.badge && (
+                <span className="ml-auto bg-primary-100 text-primary-600 py-0.5 px-2.5 rounded-full text-xs shrink-0">
+                  {item.badge}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
 
-      <div className="p-4 border-t border-gray-200">
+      <div className="p-4 border-t border-gray-200 shrink-0">
         <div className="flex items-center">
-          <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center">
+          <div className="w-8 h-8 bg-primary-100 rounded-full flex items-center justify-center shrink-0">
             <span className="text-primary-600 font-medium">
-              {userRole?.[0]?.toUpperCase()}
+              {effectiveRole?.[0]?.toUpperCase()}
             </span>
           </div>
           {!isCollapsed && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="ml-3"
+              className="ml-3 min-w-0"
             >
-              <p className="text-sm font-medium text-gray-700">
-                {userRole?.[0]?.toUpperCase() + userRole?.slice(1)}
+              <p className="text-sm font-medium text-gray-700 truncate">
+                {effectiveRole?.[0]?.toUpperCase() + effectiveRole?.slice(1)}
               </p>
+              {isTemporaryRole && (
+                <p className="text-xs text-yellow-600 truncate">Temporary Role</p>
+              )}
             </motion.div>
           )}
         </div>
       </div>
+
+      {isTemporaryRole && !isCollapsed && (
+        <div className="p-4 bg-yellow-50 border-t border-yellow-100 shrink-0">
+          <p className="text-sm text-yellow-800 truncate">
+            Temporary role active
+          </p>
+        </div>
+      )}
     </motion.div>
   );
-} 
+}

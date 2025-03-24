@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -15,6 +15,8 @@ import { RefundProvider } from './contexts/RefundContext';
 import { LoyaltyProvider } from './contexts/LoyaltyContext';
 import { InventoryProvider } from './contexts/InventoryContext';
 import { ShiftProvider } from './contexts/ShiftContext';
+import { RoleProvider, useRole } from './contexts/RoleContext';
+import RoleSwitcher from './components/roles/RoleSwitcher';
 import PrivateRoute from './components/PrivateRoute';
 import Login from './pages/Login';
 import Signup from './pages/Signup';
@@ -38,94 +40,152 @@ import StockManagement from './pages/StockManagement';
 import LowStockAlerts from './pages/LowStockAlerts';
 import InventoryDashboard from './components/inventory/InventoryDashboard';
 import ShiftManagement from './pages/ShiftManagement';
+import RoleRequests from './components/roles/RoleRequests';
 
 function AppContent() {
   const location = useLocation();
   const { userRole } = useAuth();
-  const isAuthPage = ['/login', '/signup'].includes(location.pathname);
+  const { effectiveRole, baseRole } = useRole();
+  const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+  
+  // Use effectiveRole for route protection, but keep track of base role
+  const currentRole = effectiveRole || userRole;
+
+  // Function to check if user has access to a route
+  const hasAccess = (requiredRole) => {
+    if (!requiredRole) return true;
+    if (requiredRole === 'manager') {
+      return currentRole === 'manager';
+    }
+    return true;
+  };
 
   return (
-    <div className="flex h-screen bg-gray-100">
+    <div className="min-h-screen bg-gray-100">
       {!isAuthPage && <Sidebar />}
-      <div className={`flex-1 overflow-auto ${isAuthPage ? 'w-full' : ''}`}>
-        <Toaster position="top-right" />
+      <div className={!isAuthPage ? "md:pl-64 flex flex-col min-h-screen" : ""}>
         {!isAuthPage && <DiscountBanner />}
-        <main className={`${isAuthPage ? '' : 'py-10'}`}>
-          <div className={`${isAuthPage ? '' : 'max-w-7xl mx-auto sm:px-6 lg:px-8'}`}>
+        <main className="flex-1 py-6">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
               <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
               <Route path="/pos" element={<PrivateRoute><POS /></PrivateRoute>} />
-              <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
-              <Route path="/inventory" element={<PrivateRoute><Inventory /></PrivateRoute>} />
-              <Route path="/inventory/dashboard" element={<PrivateRoute><InventoryDashboard /></PrivateRoute>} />
-              {userRole === 'manager' && (
-                <>
-                  <Route path="/inventory/stock" element={<PrivateRoute><StockManagement /></PrivateRoute>} />
-                  <Route path="/inventory/alerts" element={<PrivateRoute><LowStockAlerts /></PrivateRoute>} />
-                </>
-              )}
-              <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
               <Route path="/sales" element={<PrivateRoute><Sales /></PrivateRoute>} />
-              <Route path="/sales-goals" element={<PrivateRoute><SalesGoals /></PrivateRoute>} />
               <Route path="/customers" element={<PrivateRoute><Customers /></PrivateRoute>} />
-              <Route path="/analytics" element={<PrivateRoute><Analytics /></PrivateRoute>} />
-              <Route path="/staff" element={<PrivateRoute><Staff /></PrivateRoute>} />
-              <Route path="/staff-stats" element={<PrivateRoute><StaffStats /></PrivateRoute>} />
-              <Route path="/shifts" element={<PrivateRoute><ShiftManagement /></PrivateRoute>} />
-              <Route path="/discounts" element={<PrivateRoute><Discounts /></PrivateRoute>} />
-              <Route path="/reports" element={<PrivateRoute><Reports /></PrivateRoute>} />
+              <Route path="/analytics" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <Analytics /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/reports" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <Reports /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
               <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
               <Route path="/employee-stats" element={<PrivateRoute><EmployeeStats /></PrivateRoute>} />
-              <Route path="/marketing" element={<PrivateRoute><Marketing /></PrivateRoute>} />
-              <Route path="/expenses" element={<PrivateRoute><ExpenseManager /></PrivateRoute>} />
-              <Route path="/profit-loss" element={<PrivateRoute><ProfitLossStatement /></PrivateRoute>} />
-              <Route path="/checkout" element={<Checkout />} />
+              <Route path="/staff-stats" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <StaffStats /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/sales-goals" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <SalesGoals /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/marketing" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <Marketing /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/expenses" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <ExpenseManager /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/profit-loss" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <ProfitLossStatement /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/refunds" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <RefundManager /> : <RefundRequest />}
+                </PrivateRoute>
+              } />
               <Route path="/loyalty" element={<PrivateRoute><LoyaltyDashboard /></PrivateRoute>} />
-              <Route 
-                path="/refunds" 
-                element={
-                  <PrivateRoute>
-                    <RefundProvider>
-                      <RefundRouteComponent />
-                    </RefundProvider>
-                  </PrivateRoute>
-                } 
-              />
+              <Route path="/inventory" element={<PrivateRoute><Inventory /></PrivateRoute>} />
+              <Route path="/stock" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <StockManagement /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/low-stock" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <LowStockAlerts /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
+              <Route path="/staff" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <Staff /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
+              <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
+              <Route path="/discounts" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <Discounts /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/inventory-dashboard" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <InventoryDashboard /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/shift-management" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <ShiftManagement /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/role-requests" element={
+                <PrivateRoute>
+                  {hasAccess('manager') ? <RoleRequests /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
             </Routes>
           </div>
         </main>
       </div>
+      {!isAuthPage && <RoleSwitcher />}
+      <Toaster position="top-right" />
     </div>
   );
 }
 
-function RefundRouteComponent() {
-  const { userRole } = useAuth();
-  return userRole === 'manager' ? <RefundManager /> : <RefundRequest />;
-}
-
-function App() {
+export default function App() {
   return (
     <Router>
       <AuthProvider>
-        <SalesGoalsProvider>
-          <HeldTransactionsProvider>
-            <RefundProvider>
-              <LoyaltyProvider>
-                <InventoryProvider>
-                  <ShiftProvider>
-                    <AppContent />
-                  </ShiftProvider>
-                </InventoryProvider>
-              </LoyaltyProvider>
-            </RefundProvider>
-          </HeldTransactionsProvider>
-        </SalesGoalsProvider>
+        <RoleProvider>
+          <SalesGoalsProvider>
+            <HeldTransactionsProvider>
+              <RefundProvider>
+                <LoyaltyProvider>
+                  <InventoryProvider>
+                    <ShiftProvider>
+                      <AppContent />
+                    </ShiftProvider>
+                  </InventoryProvider>
+                </LoyaltyProvider>
+              </RefundProvider>
+            </HeldTransactionsProvider>
+          </SalesGoalsProvider>
+        </RoleProvider>
       </AuthProvider>
     </Router>
   );
 }
-
-export default App;

@@ -11,45 +11,58 @@ export default function ShiftAnalytics({ analytics }) {
     );
   }
 
-  // Safety check for empty peak hours
-  const peakHourEntries = Object.entries(analytics.peakHours || {});
+  // Safety check for empty peak hours and ensure proper data structure
+  const peakHours = analytics.peakHours || {};
+  const peakHourEntries = Object.entries(peakHours).filter(([hour, count]) => 
+    !isNaN(parseInt(hour)) && !isNaN(count)
+  );
+  
   const peakHour = peakHourEntries.length > 0 
-    ? peakHourEntries.reduce((a, b) => a[1] > b[1] ? a : b)[0] + ':00'
+    ? peakHourEntries.reduce((a, b) => (b[1] > a[1] ? b : a))[0] + ':00'
     : 'N/A';
 
   const formatChange = (value) => {
+    if (!value || isNaN(parseFloat(value))) return '0%';
     const numValue = parseFloat(value);
-    if (isNaN(numValue)) return '0%';
     return `${numValue > 0 ? '+' : ''}${numValue.toFixed(1)}%`;
   };
 
   const getChangeType = (value) => {
+    if (!value || isNaN(parseFloat(value))) return 'neutral';
     const numValue = parseFloat(value);
-    if (isNaN(numValue) || numValue === 0) return 'neutral';
-    return numValue > 0 ? 'positive' : 'negative';
+    return numValue > 0 ? 'positive' : numValue < 0 ? 'negative' : 'neutral';
   };
+
+  // Ensure all required analytics values exist with defaults
+  const {
+    totalShifts = 0,
+    totalHours = 0,
+    attendanceRate = 0,
+    shiftsPerDay = {},
+    changes = { shifts: 0, hours: 0, attendance: 0 }
+  } = analytics;
 
   const stats = [
     {
       name: 'Total Shifts',
-      value: analytics.totalShifts || 0,
+      value: totalShifts,
       icon: FiCalendar,
-      change: formatChange(analytics.changes?.shifts || 0),
-      changeType: getChangeType(analytics.changes?.shifts)
+      change: formatChange(changes.shifts),
+      changeType: getChangeType(changes.shifts)
     },
     {
       name: 'Total Hours',
-      value: `${Math.round(analytics.totalHours || 0)}h`,
+      value: `${Math.round(totalHours)}h`,
       icon: FiClock,
-      change: formatChange(analytics.changes?.hours || 0),
-      changeType: getChangeType(analytics.changes?.hours)
+      change: formatChange(changes.hours),
+      changeType: getChangeType(changes.hours)
     },
     {
       name: 'Attendance Rate',
-      value: `${Math.round(analytics.attendanceRate || 0)}%`,
+      value: `${Math.round(attendanceRate)}%`,
       icon: FiUsers,
-      change: formatChange(analytics.changes?.attendance || 0),
-      changeType: getChangeType(analytics.changes?.attendance)
+      change: formatChange(changes.attendance),
+      changeType: getChangeType(changes.attendance)
     },
     {
       name: 'Peak Hour',
@@ -60,17 +73,21 @@ export default function ShiftAnalytics({ analytics }) {
     }
   ];
 
-  // Safety check for empty data
-  const shiftsPerDay = analytics.shiftsPerDay || {};
-  const peakHours = analytics.peakHours || {};
+  // Filter and validate shiftsPerDay data
+  const validShiftsPerDay = Object.entries(shiftsPerDay)
+    .filter(([date, count]) => !isNaN(new Date(date).getTime()) && !isNaN(count))
+    .reduce((acc, [date, count]) => {
+      acc[date] = count;
+      return acc;
+    }, {});
 
-  // Get max values safely
-  const maxShiftsPerDay = Object.values(shiftsPerDay).length > 0 
-    ? Math.max(...Object.values(shiftsPerDay))
+  // Calculate max values safely
+  const maxShiftsPerDay = Object.values(validShiftsPerDay).length > 0
+    ? Math.max(...Object.values(validShiftsPerDay))
     : 1;
-  
-  const maxPeakHours = Object.values(peakHours).length > 0
-    ? Math.max(...Object.values(peakHours))
+
+  const maxPeakHours = peakHourEntries.length > 0
+    ? Math.max(...peakHourEntries.map(([_, count]) => count))
     : 1;
 
   return (
@@ -111,9 +128,9 @@ export default function ShiftAnalytics({ analytics }) {
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Shifts per Day</h3>
         <div className="h-64">
-          {Object.keys(shiftsPerDay).length > 0 ? (
+          {Object.keys(validShiftsPerDay).length > 0 ? (
             <div className="flex h-full items-end space-x-2">
-              {Object.entries(shiftsPerDay).map(([date, count], index) => (
+              {Object.entries(validShiftsPerDay).map(([date, count], index) => (
                 <motion.div
                   key={date}
                   initial={{ height: 0 }}
@@ -123,7 +140,13 @@ export default function ShiftAnalytics({ analytics }) {
                 >
                   <div className="px-2 py-1 text-xs text-center">
                     <div className="font-medium text-primary-700">{count}</div>
-                    <div className="text-gray-500">{new Date(date).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>
+                    <div className="text-gray-500">
+                      {new Date(date).toLocaleDateString('en-US', { 
+                        weekday: 'short',
+                        month: 'short',
+                        day: 'numeric'
+                      })}
+                    </div>
                   </div>
                 </motion.div>
               ))}
@@ -140,9 +163,9 @@ export default function ShiftAnalytics({ analytics }) {
       <div className="bg-white p-6 rounded-lg shadow">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Peak Hours</h3>
         <div className="h-64">
-          {Object.keys(peakHours).length > 0 ? (
+          {peakHourEntries.length > 0 ? (
             <div className="flex h-full items-end space-x-1">
-              {Object.entries(peakHours).map(([hour, count], index) => (
+              {peakHourEntries.map(([hour, count], index) => (
                 <motion.div
                   key={hour}
                   initial={{ height: 0 }}

@@ -28,7 +28,7 @@ import {
   Area
 } from 'recharts';
 import { collection, query, where, orderBy, onSnapshot, Timestamp, getDocs, limit } from 'firebase/firestore';
-import { db } from '../config/firebase';
+import { db } from '../firebase';
 import {
   getSalesReport,
   getTopProducts,

@@ -42,9 +42,9 @@ export default function DiscountBanner() {
         initial={{ height: 0, opacity: 0 }}
         animate={{ height: 'auto', opacity: 1 }}
         exit={{ height: 0, opacity: 0 }}
-        className="bg-primary-600 text-white relative"
+        className="bg-primary-600 text-white relative z-20"
       >
-        <div className="max-w-7xl mx-auto py-3 px-3 sm:px-6 lg:px-8">
+        <div className="ml-0 md:ml-64 py-3 px-3 sm:px-6 lg:px-8">
           <div className="flex items-center justify-center">
             <div className="flex items-center">
               {currentDiscount.type === 'percentage' ? (

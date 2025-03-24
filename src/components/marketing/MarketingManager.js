@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { FiPlus, FiCalendar, FiImage, FiSearch, FiTrash2 } from 'react-icons/fi';
 import MarketingBanner from './MarketingBanner';
-import { db } from '../../config/firebase';
+import { db } from '../../firebase';
 import { collection, getDocs, query, Timestamp, addDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '../../contexts/AuthContext';
 
