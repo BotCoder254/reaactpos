@@ -11,8 +11,10 @@ import {
   where,
   orderBy,
   Timestamp,
-  serverTimestamp
+  serverTimestamp,
+  limit
 } from 'firebase/firestore';
+import { toast } from 'react-hot-toast';
 
 // Helper function to convert date to Timestamp
 const toFirestoreTimestamp = (date) => {
@@ -24,31 +26,54 @@ const toFirestoreTimestamp = (date) => {
 // Shift Management
 export const createShift = async (shiftData) => {
   try {
+    if (!shiftData || typeof shiftData !== 'object') {
+      throw new Error('Invalid shift data');
+    }
+
+    // Validate required fields
+    const requiredFields = ['employeeId', 'startTime', 'endTime'];
+    for (const field of requiredFields) {
+      if (!shiftData[field]) {
+        throw new Error(`Missing required field: ${field}`);
+      }
+    }
+
     const formattedData = {
       ...shiftData,
       startTime: toFirestoreTimestamp(shiftData.startTime),
       endTime: toFirestoreTimestamp(shiftData.endTime),
+      status: 'active',
       createdAt: serverTimestamp()
     };
     const docRef = await addDoc(collection(db, 'shifts'), formattedData);
+    toast.success('Shift created successfully');
     return docRef.id;
   } catch (error) {
     console.error('Error creating shift:', error);
+    toast.error('Failed to create shift');
     throw error;
   }
 };
 
-export const updateShift = async (shiftId, shiftData) => {
+export const updateShift = async (shiftId, updateData) => {
   try {
-    const formattedData = {
-      ...shiftData,
-      startTime: toFirestoreTimestamp(shiftData.startTime),
-      endTime: toFirestoreTimestamp(shiftData.endTime),
+    if (!shiftId || typeof shiftId !== 'string') {
+      throw new Error('Invalid shift ID');
+    }
+
+    if (!updateData || typeof updateData !== 'object') {
+      throw new Error('Invalid update data');
+    }
+
+    const shiftRef = doc(db, 'shifts', shiftId);
+    await updateDoc(shiftRef, {
+      ...updateData,
       updatedAt: serverTimestamp()
-    };
-    await updateDoc(doc(db, 'shifts', shiftId), formattedData);
+    });
+    toast.success('Shift updated successfully');
   } catch (error) {
     console.error('Error updating shift:', error);
+    toast.error('Failed to update shift');
     throw error;
   }
 };
@@ -62,43 +87,28 @@ export const deleteShift = async (shiftId) => {
   }
 };
 
-export const getShifts = async (startDate, endDate, cashierId = null) => {
+export const getShifts = async (filters = {}) => {
   try {
-    let baseQuery;
-    const constraints = [];
+    const shiftsRef = collection(db, 'shifts');
+    let queryRef = query(shiftsRef, orderBy('startTime', 'desc'));
 
-    // Only add cashierId filter if it's provided and valid
-    if (cashierId) {
-      constraints.push(where('cashierId', '==', cashierId));
+    // Only add filters if they are defined
+    if (filters.status && typeof filters.status === 'string') {
+      queryRef = query(queryRef, where('status', '==', filters.status));
     }
 
-    // Add startTime ordering
-    constraints.push(orderBy('startTime'));
+    if (filters.employeeId && typeof filters.employeeId === 'string') {
+      queryRef = query(queryRef, where('employeeId', '==', filters.employeeId));
+    }
 
-    baseQuery = query(collection(db, 'shifts'), ...constraints);
-    const querySnapshot = await getDocs(baseQuery);
-    
-    const shifts = querySnapshot.docs
-      .map(doc => {
-        const data = doc.data();
-        return {
-          id: doc.id,
-          ...data,
-          startTime: data.startTime?.toDate(),
-          endTime: data.endTime?.toDate()
-        };
-      })
-      .filter(shift => {
-        if (!shift.startTime) return false;
-        const shiftStart = new Date(shift.startTime);
-        const filterStart = new Date(startDate);
-        const filterEnd = new Date(endDate);
-        return shiftStart >= filterStart && shiftStart <= filterEnd;
-      });
-
-    return shifts;
+    const snapshot = await getDocs(queryRef);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    }));
   } catch (error) {
-    console.error('Error getting shifts:', error);
+    console.error('Error fetching shifts:', error);
+    toast.error('Failed to fetch shifts');
     throw error;
   }
 };
@@ -246,21 +256,33 @@ export const markNotificationAsRead = async (notificationId) => {
 
 export const getNotifications = async (userId) => {
   try {
+    if (!userId) {
+      console.warn('No userId provided to getNotifications');
+      return [];
+    }
+
     const q = query(
       collection(db, 'notifications'),
       where('userId', '==', userId),
       where('read', '==', false),
-      orderBy('createdAt', 'desc')
+      orderBy('createdAt', 'desc'),
+      limit(50)
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        createdAt: data.createdAt?.toDate() || new Date(),
+        readAt: data.readAt?.toDate() || null
+      };
+    });
   } catch (error) {
     console.error('Error getting notifications:', error);
-    throw error;
+    toast.error('Failed to fetch notifications');
+    return [];
   }
 };
 
@@ -419,6 +441,27 @@ export const getCashiers = async () => {
     if (cashiersCache) {
       return cashiersCache;
     }
+    throw error;
+  }
+};
+
+export const endShift = async (shiftId) => {
+  try {
+    if (!shiftId || typeof shiftId !== 'string') {
+      throw new Error('Invalid shift ID');
+    }
+
+    const shiftRef = doc(db, 'shifts', shiftId);
+    await updateDoc(shiftRef, {
+      status: 'completed',
+      endTime: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    });
+
+    toast.success('Shift ended successfully');
+  } catch (error) {
+    console.error('Error ending shift:', error);
+    toast.error('Failed to end shift');
     throw error;
   }
 }; 

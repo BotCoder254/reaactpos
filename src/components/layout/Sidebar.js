@@ -19,6 +19,7 @@ import {
   ArchiveBoxIcon,
   InboxStackIcon,
   ExclamationCircleIcon,
+  ShieldExclamationIcon,
   CalendarIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
@@ -62,7 +63,8 @@ export default function Sidebar() {
     { name: 'Profit and Loss', icon: ChartBarIcon, path: '/profit-loss' },
     { name: 'Loyalty Program', icon: FiStar, path: '/loyalty' },
     { name: 'Settings', icon: CogIcon, path: '/settings' },
-    { name: 'Refunds', icon: FiRefreshCcw, path: '/refunds' }
+    { name: 'Refunds', icon: FiRefreshCcw, path: '/refunds' },
+    { name: 'Fraud Monitoring', icon: ShieldExclamationIcon, path: '/fraud-monitoring' }
   ];
 
   const cashierNavItems = [

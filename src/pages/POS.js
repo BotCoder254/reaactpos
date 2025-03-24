@@ -35,6 +35,7 @@ import { getReceiptBranding, generateReceiptHTML } from '../utils/receiptQueries
 import ChangeCalculator from '../components/transactions/ChangeCalculator';
 import { toast } from 'react-hot-toast';
 import { useInventory } from '../contexts/InventoryContext';
+import TransactionVerification from '../components/fraud/TransactionVerification';
 
 const TAX_RATE = 0.1; // 10% tax rate
 
@@ -76,6 +77,7 @@ export default function POS() {
   const { checkLowStock, findAlternatives } = useInventory();
   const [alternativeProducts, setAlternativeProducts] = useState([]);
   const [showAlternatives, setShowAlternatives] = useState(false);
+  const [currentTransaction, setCurrentTransaction] = useState(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -650,6 +652,28 @@ export default function POS() {
     );
   };
 
+  const handleProcessTransaction = async () => {
+    try {
+      const totals = calculateTotal();
+      const transaction = {
+        items: cart,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        tax: totals.tax,
+        total: totals.total,
+        customerId: selectedCustomer?.id,
+        cashierId: currentUser.uid,
+        timestamp: new Date()
+      };
+      
+      setCurrentTransaction(transaction);
+      return transaction;
+    } catch (error) {
+      console.error('Error processing transaction:', error);
+      toast.error('Failed to process transaction');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-full">
@@ -1023,6 +1047,12 @@ export default function POS() {
       />
 
       <AlternativesModal />
+
+      {/* Update Transaction Verification */}
+      <TransactionVerification 
+        transaction={currentTransaction} 
+        onVerify={handleProcessTransaction}
+      />
     </div>
   );
 }
