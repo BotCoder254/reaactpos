@@ -43,6 +43,7 @@ import InventoryDashboard from './components/inventory/InventoryDashboard';
 import ShiftManagement from './pages/ShiftManagement';
 import RoleRequests from './components/roles/RoleRequests';
 import FraudMonitoring from './components/fraud/FraudMonitoring';
+import Shifts from './pages/Shifts';
 
 function AppContent() {
   const location = useLocation();
@@ -150,6 +151,7 @@ function AppContent() {
                   {userRole === 'manager' ? <Discounts /> : <Navigate to="/" replace />}
                   </PrivateRoute>
               } />
+              <Route path="/shifts" element={<PrivateRoute><Shifts /></PrivateRoute>} />
             </Routes>
           </div>
         </main>

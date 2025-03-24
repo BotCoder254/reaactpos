@@ -5,24 +5,61 @@ import { FiClock, FiCheck, FiX } from 'react-icons/fi';
 import { clockIn, clockOut } from '../../utils/shiftQueries';
 import toast from 'react-hot-toast';
 
-export default function AttendanceLog({ attendance = [], shifts = [], userRole }) {
-  const handleClockIn = async (shiftId) => {
+export default function AttendanceLog({ attendance = [], shifts = [], userRole, currentUser, onUpdate }) {
+  const handleClockIn = async (shift) => {
     try {
-      await clockIn(shiftId);
-      toast.success('Clocked in successfully');
+      if (!shift || !shift.id) {
+        throw new Error('Invalid shift data');
+      }
+
+      if (!currentUser?.uid) {
+        toast.error('Please log in to clock in');
+        return;
+      }
+
+      // Verify this shift belongs to the current user
+      if (shift.employeeId !== currentUser.uid) {
+        toast.error('You are not assigned to this shift');
+        return;
+      }
+
+      // Check if shift is active
+      const shiftStart = new Date(shift.startTime);
+      const shiftEnd = new Date(shift.endTime);
+      const now = new Date();
+
+      if (now < shiftStart) {
+        toast.error('Cannot clock in before shift starts');
+        return;
+      }
+
+      if (now > shiftEnd) {
+        toast.error('Cannot clock in after shift ends');
+        return;
+      }
+
+      await clockIn(shift.id, currentUser.uid);
+      toast.success('Successfully clocked in');
+      if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Error clocking in:', error);
-      toast.error('Failed to clock in');
+      toast.error(error.message || 'Failed to clock in');
     }
   };
 
   const handleClockOut = async (attendanceId) => {
     try {
+      if (!currentUser?.uid) {
+        toast.error('Please log in to clock out');
+        return;
+      }
+
       await clockOut(attendanceId);
       toast.success('Clocked out successfully');
+      if (onUpdate) onUpdate();
     } catch (error) {
       console.error('Error clocking out:', error);
-      toast.error('Failed to clock out');
+      toast.error(error.message || 'Failed to clock out');
     }
   };
 
@@ -75,7 +112,7 @@ export default function AttendanceLog({ attendance = [], shifts = [], userRole }
                       <div>
                         {!attendanceRecord ? (
                           <button
-                            onClick={() => handleClockIn(shift.id)}
+                            onClick={() => handleClockIn(shift)}
                             className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-full shadow-sm text-white bg-primary-600 hover:bg-primary-700"
                           >
                             <FiClock className="mr-1" />

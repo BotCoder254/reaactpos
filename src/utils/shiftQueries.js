@@ -99,21 +99,28 @@ export const deleteShift = async (shiftId) => {
 export const getShifts = async (startDate, endDate, employeeId = null) => {
   try {
     const shiftsRef = collection(db, 'shifts');
-    let constraints = [orderBy('startTime', 'desc')];
+    let queryRef;
 
-    if (startDate) {
-      constraints.push(where('startTime', '>=', toFirestoreTimestamp(startDate)));
-    }
-    
-    if (endDate) {
-      constraints.push(where('startTime', '<=', toFirestoreTimestamp(endDate)));
-    }
-
+    // Build query based on filters
     if (employeeId) {
-      constraints.push(where('employeeId', '==', employeeId));
+      // For cashier view - filter by employeeId first
+      queryRef = query(
+        shiftsRef,
+        where('employeeId', '==', employeeId),
+        where('startTime', '>=', startDate),
+        where('startTime', '<=', endDate),
+        orderBy('startTime', 'desc')
+      );
+    } else {
+      // For manager view - just filter by date range
+      queryRef = query(
+        shiftsRef,
+        where('startTime', '>=', startDate),
+        where('startTime', '<=', endDate),
+        orderBy('startTime', 'desc')
+      );
     }
 
-    const queryRef = query(shiftsRef, ...constraints);
     const snapshot = await getDocs(queryRef);
     
     // Get all unique employee IDs
@@ -158,7 +165,48 @@ export const getShifts = async (startDate, endDate, employeeId = null) => {
     });
   } catch (error) {
     console.error('Error fetching shifts:', error);
-    toast.error('Failed to fetch shifts');
+    // Check if it's an index error and provide guidance
+    if (error.code === 'failed-precondition') {
+      toast.error('System configuration needed. Please contact administrator.');
+      console.error('Index needed:', error.message);
+    } else {
+      toast.error('Failed to fetch shifts');
+    }
+    throw error;
+  }
+};
+
+// Add a new function to handle week view
+export const getShiftsForWeek = async (startDate, endDate, employeeId = null) => {
+  try {
+    const shiftsRef = collection(db, 'shifts');
+    let queryRef;
+
+    if (employeeId) {
+      queryRef = query(
+        shiftsRef,
+        where('employeeId', '==', employeeId),
+        where('startTime', '>=', startDate),
+        where('startTime', '<=', endDate)
+      );
+    } else {
+      queryRef = query(
+        shiftsRef,
+        where('startTime', '>=', startDate),
+        where('startTime', '<=', endDate)
+      );
+    }
+
+    const snapshot = await getDocs(queryRef);
+    return snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      startTime: doc.data().startTime?.toDate().toISOString(),
+      endTime: doc.data().endTime?.toDate().toISOString()
+    }));
+  } catch (error) {
+    console.error('Error fetching weekly shifts:', error);
+    toast.error('Failed to fetch weekly shifts');
     throw error;
   }
 };
@@ -166,8 +214,12 @@ export const getShifts = async (startDate, endDate, employeeId = null) => {
 // Attendance Management
 export const clockIn = async (shiftId, cashierId) => {
   try {
-    if (!shiftId || !cashierId) {
-      throw new Error('ShiftId and CashierId are required');
+    // Validate required parameters
+    if (!shiftId) {
+      throw new Error('Shift ID is required');
+    }
+    if (!cashierId) {
+      throw new Error('Cashier ID is required');
     }
 
     // Verify shift exists and is active
@@ -179,8 +231,14 @@ export const clockIn = async (shiftId, cashierId) => {
     }
 
     const shiftData = shiftDoc.data();
+    
+    // Verify shift is active and belongs to the cashier
     if (shiftData.status !== 'active') {
       throw new Error('Cannot clock in to an inactive shift');
+    }
+    
+    if (shiftData.employeeId !== cashierId) {
+      throw new Error('You are not assigned to this shift');
     }
 
     // Verify cashier exists and get details
@@ -204,6 +262,19 @@ export const clockIn = async (shiftId, cashierId) => {
     const existingAttendance = await getDocs(existingAttendanceQuery);
     if (!existingAttendance.empty) {
       throw new Error('Already clocked in for this shift');
+    }
+
+    // Verify shift timing
+    const now = new Date();
+    const shiftStart = shiftData.startTime.toDate();
+    const shiftEnd = shiftData.endTime.toDate();
+    
+    if (now < shiftStart) {
+      throw new Error('Cannot clock in before shift starts');
+    }
+    
+    if (now > shiftEnd) {
+      throw new Error('Cannot clock in after shift ends');
     }
 
     // Create attendance record with full cashier details
