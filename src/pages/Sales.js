@@ -41,7 +41,7 @@ export default function Sales() {
         const salesQuery = query(
           salesCollection,
           orderBy('timestamp', 'desc'),
-          limit(100) // Limit to last 100 sales for better performance
+          limit(100)
         );
         
         const salesSnapshot = await getDocs(salesQuery);
@@ -51,9 +51,25 @@ export default function Sales() {
             ...doc.data(),
             timestamp: doc.data().timestamp?.toDate().toLocaleString() || 'N/A'
           }))
-          .filter(sale => sale.status === 'completed'); // Filter completed sales in memory
+          .filter(sale => sale.status === 'completed');
 
         setSales(salesList);
+
+        // Load invoice settings from localStorage
+        const savedSettings = localStorage.getItem('invoiceSettings');
+        const savedCompanyInfo = localStorage.getItem('companyData');
+        
+        if (savedSettings) {
+          setCurrentSettings(JSON.parse(savedSettings));
+        } else {
+          setCurrentSettings(settings);
+        }
+        
+        if (savedCompanyInfo) {
+          setCurrentCompanyInfo(JSON.parse(savedCompanyInfo));
+        } else {
+          setCurrentCompanyInfo(companyInfo);
+        }
 
         // Fetch receipt branding
         const branding = await getReceiptBranding();
@@ -66,34 +82,16 @@ export default function Sales() {
     };
 
     fetchData();
-  }, []);
-
-  // Load latest settings and company info from localStorage
-  useEffect(() => {
-    const savedSettings = localStorage.getItem('invoiceSettings');
-    const savedCompanyInfo = localStorage.getItem('companyData');
-    
-    if (savedSettings) {
-      setCurrentSettings(JSON.parse(savedSettings));
-    } else {
-      setCurrentSettings(settings);
-    }
-    
-    if (savedCompanyInfo) {
-      setCurrentCompanyInfo(JSON.parse(savedCompanyInfo));
-    } else {
-      setCurrentCompanyInfo(companyInfo);
-    }
   }, [settings, companyInfo]);
 
-  // Update current settings when they change
+  // Update settings when they change
   useEffect(() => {
     if (settings) {
       setCurrentSettings(settings);
     }
   }, [settings]);
 
-  // Update current company info when it changes
+  // Update company info when it changes
   useEffect(() => {
     if (companyInfo) {
       setCurrentCompanyInfo(companyInfo);
@@ -151,7 +149,15 @@ export default function Sales() {
   };
 
   const handleViewInvoice = (sale) => {
-    setSelectedSale(sale);
+    setSelectedSale({
+      ...sale,
+      timestamp: new Date(sale.timestamp),
+      customer: {
+        name: sale.customer?.name || sale.customerName || 'Walk-in Customer',
+        email: sale.customer?.email || sale.email || '',
+        address: sale.customer?.address || sale.address || ''
+      }
+    });
     setShowInvoice(true);
   };
 

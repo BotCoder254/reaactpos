@@ -4,15 +4,50 @@ import { FiPrinter, FiMail, FiMessageSquare, FiCheck, FiX, FiEye } from 'react-i
 import { useInvoiceCustomization } from '../../contexts/InvoiceCustomizationContext';
 import Tooltip from '../ui/Tooltip';
 import InvoicePreview from './InvoicePreview';
-import { format } from 'date-fns';
+import { format as dateFormat } from 'date-fns';
 
 export default function CashierInvoiceOptions() {
   const { settings, updateSettings, companyInfo, recentSales } = useInvoiceCustomization();
-  const [format, setFormat] = useState('digital');
+  const [invoiceFormat, setInvoiceFormat] = useState('digital');
   const [message, setMessage] = useState('');
-  const [selectedTemplate, setSelectedTemplate] = useState(settings.defaultTemplate || 'standard');
+  const [selectedTemplate, setSelectedTemplate] = useState(settings?.defaultTemplate || 'standard');
   const [showPreview, setShowPreview] = useState(false);
   const [selectedSale, setSelectedSale] = useState(null);
+  const [currentSettings, setCurrentSettings] = useState(null);
+  const [currentCompanyInfo, setCurrentCompanyInfo] = useState(null);
+
+  // Load latest settings and company info from localStorage
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('invoiceSettings');
+    const savedCompanyInfo = localStorage.getItem('companyData');
+    
+    if (savedSettings) {
+      setCurrentSettings(JSON.parse(savedSettings));
+    } else {
+      setCurrentSettings(settings);
+    }
+    
+    if (savedCompanyInfo) {
+      setCurrentCompanyInfo(JSON.parse(savedCompanyInfo));
+    } else {
+      setCurrentCompanyInfo(companyInfo);
+    }
+  }, [settings, companyInfo]);
+
+  // Update current settings when they change
+  useEffect(() => {
+    if (settings) {
+      setCurrentSettings(settings);
+      setSelectedTemplate(settings.defaultTemplate || 'standard');
+    }
+  }, [settings]);
+
+  // Update current company info when it changes
+  useEffect(() => {
+    if (companyInfo) {
+      setCurrentCompanyInfo(companyInfo);
+    }
+  }, [companyInfo]);
 
   useEffect(() => {
     if (recentSales?.length > 0) {
@@ -20,19 +55,27 @@ export default function CashierInvoiceOptions() {
     }
   }, [recentSales]);
 
-  const handleApply = () => {
-    updateSettings({
-      ...settings,
-      currentFormat: format,
-      customMessage: message,
-      selectedTemplate: selectedTemplate
-    });
+  const handleApply = async () => {
+    try {
+      const updatedSettings = {
+        ...currentSettings,
+        currentFormat: invoiceFormat,
+        customMessage: message,
+        selectedTemplate: selectedTemplate
+      };
+
+      await updateSettings(updatedSettings);
+      localStorage.setItem('invoiceSettings', JSON.stringify(updatedSettings));
+      
+    } catch (error) {
+      console.error('Error updating settings:', error);
+    }
   };
 
   const handleCancel = () => {
-    setFormat('digital');
+    setInvoiceFormat('digital');
     setMessage('');
-    setSelectedTemplate(settings.defaultTemplate || 'standard');
+    setSelectedTemplate(currentSettings?.defaultTemplate || 'standard');
   };
 
   return (
@@ -56,9 +99,9 @@ export default function CashierInvoiceOptions() {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setFormat('digital')}
+              onClick={() => setInvoiceFormat('digital')}
               className={`flex items-center justify-center p-4 rounded-lg border-2 transition-colors ${
-                format === 'digital'
+                invoiceFormat === 'digital'
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : 'border-gray-200 hover:border-blue-200'
               }`}
@@ -72,9 +115,9 @@ export default function CashierInvoiceOptions() {
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setFormat('printed')}
+              onClick={() => setInvoiceFormat('printed')}
               className={`flex items-center justify-center p-4 rounded-lg border-2 transition-colors ${
-                format === 'printed'
+                invoiceFormat === 'printed'
                   ? 'border-blue-500 bg-blue-50 text-blue-700'
                   : 'border-gray-200 hover:border-blue-200'
               }`}
@@ -90,7 +133,7 @@ export default function CashierInvoiceOptions() {
       <section className="mb-8">
         <h3 className="text-lg font-medium text-gray-900 mb-4">Invoice Template</h3>
         <div className="grid grid-cols-2 gap-4">
-          {settings.templates?.map((template) => (
+          {currentSettings?.templates?.map((template) => (
             <motion.button
               key={template.id}
               whileHover={{ scale: 1.02 }}
@@ -154,24 +197,27 @@ export default function CashierInvoiceOptions() {
 
       {showPreview && selectedSale && (
         <InvoicePreview
-          settings={settings}
-          companyInfo={companyInfo}
+          settings={currentSettings}
+          companyInfo={currentCompanyInfo}
           sale={{
             ...selectedSale,
             timestamp: selectedSale.timestamp?.toDate?.() || new Date(selectedSale.timestamp),
-            invoiceNumber: selectedSale.invoiceNumber || `INV-${format(new Date(), 'yyyyMMdd-HHmmss')}`,
-            customer: selectedSale.customer || {
-              name: 'Sample Customer',
-              email: 'sample@example.com',
-              address: '123 Sample St, Sample City'
+            invoiceNumber: selectedSale.invoiceNumber || `INV-${dateFormat(new Date(), 'yyyyMMdd-HHmmss')}`,
+            customer: {
+              name: selectedSale.customer?.name || selectedSale.customerName || 'Walk-in Customer',
+              email: selectedSale.customer?.email || selectedSale.email || '',
+              address: selectedSale.customer?.address || selectedSale.address || ''
             }
           }}
           onClose={() => setShowPreview(false)}
-          onPrint={() => console.log('Print')}
+          onPrint={() => window.print()}
           onDownload={() => console.log('Download')}
-          onEmail={() => console.log('Email')}
+          onEmail={() => {
+            const email = prompt('Enter email address:');
+            if (email) console.log('Email to:', email);
+          }}
         />
       )}
     </div>
   );
-} 
+}
