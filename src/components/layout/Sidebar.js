@@ -33,11 +33,9 @@ import { NavLink } from 'react-router-dom';
 
 export default function Sidebar() {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const { currentUser, userRole } = useAuth();
+  const { currentUser } = useAuth();
+  const { effectiveRole, isTemporaryRole } = useRole();
   const location = useLocation();
-  const roleContext = useRole();
-  const effectiveRole = roleContext?.effectiveRole || userRole;
-  const isTemporaryRole = roleContext?.isTemporaryRole || false;
 
   // If user is not authenticated, don't render the sidebar
   if (!currentUser) return null;
@@ -56,7 +54,7 @@ export default function Sidebar() {
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
     
-    // Updated Staff & Shift Management Section
+    // Staff & Shift Management Section
     { name: 'Staff Management', icon: UsersIcon, path: '/staff', 
       subItems: [
         { name: 'Staff List', icon: UserGroupIcon, path: '/staff' },
@@ -95,7 +93,7 @@ export default function Sidebar() {
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     
-    // Updated Shift Management Section for Cashiers
+    // Shift Management Section for Cashiers
     // { name: 'My Shifts', icon: CalendarIcon, path: '/shifts',
     //   subItems: [
     //     { name: 'View Schedule', icon: FiCalendar, path: '/shifts/schedule' },
@@ -127,7 +125,7 @@ export default function Sidebar() {
             animate={{ opacity: 1 }}
             className="text-xl font-bold text-primary-600 truncate"
           >
-            POS System
+            {isTemporaryRole ? `POS System (${effectiveRole})` : 'POS System'}
           </motion.h1>
         )}
         <button
@@ -202,7 +200,7 @@ export default function Sidebar() {
                           isTemporaryRole ? 'text-yellow-400' : 'text-primary-400'
                         )}
                       />
-                      <span className="ml-2 truncate">{subItem.name}</span>
+                      <span className="ml-3 truncate">{subItem.name}</span>
                     </NavLink>
                   ))}
                 </div>

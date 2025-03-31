@@ -15,7 +15,7 @@ import { RefundProvider } from './contexts/RefundContext';
 import { LoyaltyProvider } from './contexts/LoyaltyContext';
 import { InventoryProvider } from './contexts/InventoryContext';
 import { ShiftProvider } from './contexts/ShiftContext';
-import { RoleProvider } from './contexts/RoleContext';
+import { RoleProvider, useRole } from './contexts/RoleContext';
 import { FraudDetectionProvider } from './contexts/FraudDetectionContext';
 import RoleSwitcher from './components/roles/RoleSwitcher';
 import PrivateRoute from './components/PrivateRoute';
@@ -56,8 +56,22 @@ import ShiftNotifications from './components/shifts/ShiftNotifications';
 
 function AppContent() {
   const location = useLocation();
-  const { userRole } = useAuth();
+  const { effectiveRole } = useRole();
+  const { currentUser } = useAuth();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+
+  // Redirect to login if no user
+  if (!currentUser && !isAuthPage) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Handle role-based redirects
+  const handleRoleAccess = (Component, allowedRole) => {
+    if (!allowedRole || effectiveRole === allowedRole) {
+      return <Component />;
+    }
+    return <Navigate to="/" replace />;
+  };
 
   return (
     <div className="min-h-screen bg-gray-100">
@@ -73,131 +87,110 @@ function AppContent() {
               <Route path="/pos" element={<PrivateRoute><POS /></PrivateRoute>} />
               <Route path="/sales" element={<PrivateRoute><Sales /></PrivateRoute>} />
               <Route path="/customers" element={<PrivateRoute><Customers /></PrivateRoute>} />
+              
+              {/* Manager-only routes */}
               <Route path="/analytics" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <Analytics /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(Analytics, 'manager')}
                 </PrivateRoute>
               } />
               <Route path="/reports" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <Reports /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(Reports, 'manager')}
                 </PrivateRoute>
               } />
-              <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
-              <Route path="/employee-stats" element={<PrivateRoute><EmployeeStats /></PrivateRoute>} />
               <Route path="/staff-stats" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <StaffStats /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(StaffStats, 'manager')}
                 </PrivateRoute>
               } />
               <Route path="/sales-goals" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <SalesGoals /> : <Navigate to="/" replace />}
-                </PrivateRoute>
-              } />
-              <Route path="/marketing" element={
-                <PrivateRoute>
-                  <Marketing />
+                  {handleRoleAccess(SalesGoals, 'manager')}
                 </PrivateRoute>
               } />
               <Route path="/expenses" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <ExpenseManager /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(ExpenseManager, 'manager')}
                 </PrivateRoute>
               } />
               <Route path="/profit-loss" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <ProfitLossStatement /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(ProfitLossStatement, 'manager')}
                 </PrivateRoute>
               } />
-              <Route path="/refunds" element={
-                <PrivateRoute>
-                  {userRole === 'manager' ? <RefundManager /> : <RefundRequest />}
-                </PrivateRoute>
-              } />
-              <Route path="/loyalty" element={<PrivateRoute><LoyaltyDashboard /></PrivateRoute>} />
-              <Route path="/inventory" element={<PrivateRoute><Inventory /></PrivateRoute>} />
               <Route path="/stock" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <StockManagement /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(StockManagement, 'manager')}
                 </PrivateRoute>
               } />
               <Route path="/low-stock" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <LowStockAlerts /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(LowStockAlerts, 'manager')}
                 </PrivateRoute>
               } />
               <Route path="/inventory-dashboard" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <InventoryDashboard /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(InventoryDashboard, 'manager')}
                 </PrivateRoute>
               } />
-              <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
               <Route path="/staff" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <Staff /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(Staff, 'manager')}
                 </PrivateRoute>
               } />
-              <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
-              <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
               <Route path="/discounts" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <Discounts /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(Discounts, 'manager')}
                 </PrivateRoute>
               } />
-              
-              {/* Shift Management Routes */}
-              <Route path="/shifts" element={<PrivateRoute><Shifts /></PrivateRoute>} />
-              
-              {/* Manager Shift Routes */}
-              <Route path="/shifts/schedule" element={
-                <PrivateRoute>
-                  {userRole === 'manager' ? <ShiftSchedule /> : <Navigate to="/shifts" replace />}
-                </PrivateRoute>
-              } />
-              <Route path="/shifts/calendar" element={
-                <PrivateRoute>
-                  <ShiftCalendar />
-                </PrivateRoute>
-              } />
-              <Route path="/shifts/attendance" element={
-                <PrivateRoute>
-                  <AttendanceLog />
-                </PrivateRoute>
-              } />
-              <Route path="/shifts/analytics" element={
-                <PrivateRoute>
-                  {userRole === 'manager' ? <ShiftAnalytics /> : <Navigate to="/shifts" replace />}
-                </PrivateRoute>
-              } />
-              <Route path="/shifts/breaks" element={
-                <PrivateRoute>
-                  <ShiftBreaks />
-                </PrivateRoute>
-              } />
-              
-              {/* Cashier Shift Routes */}
-              <Route path="/shifts/clock" element={
-                <PrivateRoute>
-                  {userRole === 'cashier' ? <ShiftClock /> : <Navigate to="/shifts" replace />}
-                </PrivateRoute>
-              } />
-              <Route path="/shifts/notifications" element={
-                <PrivateRoute>
-                  <ShiftNotifications />
-                </PrivateRoute>
-              } />
-              
               <Route path="/role-requests" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <RoleRequests /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(RoleRequests, 'manager')}
                 </PrivateRoute>
               } />
               <Route path="/fraud-monitoring" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <FraudMonitoring /> : <Navigate to="/" replace />}
+                  {handleRoleAccess(FraudMonitoring, 'manager')}
                 </PrivateRoute>
               } />
+
+              {/* Shared routes */}
+              <Route path="/settings" element={<PrivateRoute><Settings /></PrivateRoute>} />
+              <Route path="/employee-stats" element={<PrivateRoute><EmployeeStats /></PrivateRoute>} />
+              <Route path="/marketing" element={<PrivateRoute><Marketing /></PrivateRoute>} />
+              <Route path="/refunds" element={
+                <PrivateRoute>
+                  {effectiveRole === 'manager' ? <RefundManager /> : <RefundRequest />}
+                </PrivateRoute>
+              } />
+              <Route path="/loyalty" element={<PrivateRoute><LoyaltyDashboard /></PrivateRoute>} />
+              <Route path="/inventory" element={<PrivateRoute><Inventory /></PrivateRoute>} />
+              <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
+              <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
+              <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
+
+              {/* Shift Management Routes */}
+              <Route path="/shifts" element={<PrivateRoute><Shifts /></PrivateRoute>} />
+              <Route path="/shifts/schedule" element={
+                <PrivateRoute>
+                  {handleRoleAccess(ShiftSchedule, 'manager')}
+                </PrivateRoute>
+              } />
+              <Route path="/shifts/calendar" element={<PrivateRoute><ShiftCalendar /></PrivateRoute>} />
+              <Route path="/shifts/attendance" element={<PrivateRoute><AttendanceLog /></PrivateRoute>} />
+              <Route path="/shifts/analytics" element={
+                <PrivateRoute>
+                  {handleRoleAccess(ShiftAnalytics, 'manager')}
+                </PrivateRoute>
+              } />
+              <Route path="/shifts/breaks" element={<PrivateRoute><ShiftBreaks /></PrivateRoute>} />
+              <Route path="/shifts/clock" element={
+                <PrivateRoute>
+                  {handleRoleAccess(ShiftClock, 'cashier')}
+                </PrivateRoute>
+              } />
+              <Route path="/shifts/notifications" element={<PrivateRoute><ShiftNotifications /></PrivateRoute>} />
             </Routes>
           </div>
         </main>

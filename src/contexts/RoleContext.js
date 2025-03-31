@@ -3,7 +3,7 @@ import { useAuth } from './AuthContext';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import toast from 'react-hot-toast';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const RoleContext = createContext();
 
@@ -17,9 +17,22 @@ export function RoleProvider({ children }) {
   const [roleRequest, setRoleRequest] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
+  const location = useLocation();
 
   // The effective role is either the temporary role or the base role
   const effectiveRole = temporaryRole || baseRole;
+
+  // Function to safely navigate after role changes
+  const safeNavigate = (path) => {
+    try {
+      // Use replace to avoid breaking the back button
+      navigate(path, { replace: true });
+    } catch (error) {
+      console.error('Navigation error:', error);
+      // Fallback to window.location if navigate fails
+      window.location.href = path;
+    }
+  };
 
   // Function to request temporary role elevation
   const requestRoleElevation = async (reason) => {
@@ -62,6 +75,9 @@ export function RoleProvider({ children }) {
       setTemporaryRole('cashier');
       toast.success(`Switched to cashier role for ${duration} minutes`);
       
+      // Safe navigation to dashboard
+      safeNavigate('/');
+      
       // Set timeout to revert role
       const timeoutId = setTimeout(() => {
         revertToBaseRole();
@@ -83,13 +99,14 @@ export function RoleProvider({ children }) {
       setIsLoading(true);
       const requestRef = doc(db, 'roleRequests', userId);
       const roleRef = doc(db, 'temporaryRoles', userId);
+      const expiresAt = new Date(Date.now() + duration * 60000);
 
       await Promise.all([
-        setDoc(requestRef, { status: 'approved' }, { merge: true }),
+        setDoc(requestRef, { status: 'approved', expiresAt }, { merge: true }),
         setDoc(roleRef, {
           userId,
           temporaryRole: 'manager',
-          expiresAt: new Date(Date.now() + duration * 60000),
+          expiresAt,
           timestamp: serverTimestamp(),
         }),
       ]);
@@ -103,7 +120,6 @@ export function RoleProvider({ children }) {
     }
   };
 
-  // Function to revert to base role
   const revertToBaseRole = async () => {
     try {
       setIsLoading(true);
@@ -114,37 +130,12 @@ export function RoleProvider({ children }) {
         timestamp: serverTimestamp(),
       });
       
-      // Clear the temporary role first
       setTemporaryRole(null);
       
-      // Get current pathname
-      const currentPath = window.location.pathname;
+      // Safe navigation to dashboard
+      safeNavigate('/');
       
-      // Define manager-only paths
-      const managerOnlyPaths = [
-        '/analytics',
-        '/reports',
-        '/staff-stats',
-        '/sales-goals',
-        '/marketing',
-        '/expenses',
-        '/profit-loss',
-        '/stock',
-        '/low-stock',
-        '/staff',
-        '/discounts',
-        '/inventory-dashboard',
-        '/shift-management',
-        '/role-requests'
-      ];
-
-      // Only navigate if user is on a manager-only path and doesn't have manager as base role
-      if (managerOnlyPaths.some(path => currentPath.startsWith(path)) && baseRole !== 'manager') {
-        navigate('/');
-        toast.success('Reverted to original role and redirected to dashboard');
-      } else {
-        toast.success('Reverted to original role');
-      }
+      toast.success('Reverted to original role');
     } catch (error) {
       console.error('Error reverting role:', error);
       toast.error('Failed to revert role');
@@ -198,6 +189,39 @@ export function RoleProvider({ children }) {
 
     checkExistingRole();
   }, [currentUser]);
+
+  // Handle unauthorized access attempts
+  useEffect(() => {
+    if (!currentUser || !effectiveRole) return;
+
+    const managerOnlyPaths = [
+      '/analytics',
+      '/reports',
+      '/staff-stats',
+      '/sales-goals',
+      '/expenses',
+      '/profit-loss',
+      '/stock',
+      '/low-stock',
+      '/inventory-dashboard',
+      '/staff',
+      '/discounts',
+      '/role-requests',
+      '/fraud-monitoring'
+    ];
+
+    const cashierOnlyPaths = [
+      '/shifts/clock',
+    ];
+
+    const currentPath = location.pathname;
+
+    if (effectiveRole === 'cashier' && managerOnlyPaths.some(path => currentPath.startsWith(path))) {
+      safeNavigate('/');
+    } else if (effectiveRole === 'manager' && cashierOnlyPaths.some(path => currentPath.startsWith(path))) {
+      safeNavigate('/shifts/schedule');
+    }
+  }, [effectiveRole, location.pathname]);
 
   const value = {
     effectiveRole,
