@@ -3,10 +3,16 @@ const nextConfig = {
   output: 'standalone',
   reactStrictMode: true,
   swcMinify: true,
-  // Handle image domains if you're using next/image
   images: {
     domains: ['your-domain.com'],
+    unoptimized: true // Add this for static exports
   },
+  // Ensure proper static file handling
+  poweredByHeader: false,
+  generateEtags: true,
+  compress: true,
+  // Cache static files
+  staticPageGenerationTimeout: 90,
   // Enable experimental features if needed
   experimental: {
     // Add experimental features here
