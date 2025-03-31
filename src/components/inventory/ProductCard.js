@@ -26,6 +26,8 @@ export default function ProductCard({ product, onEdit, isManager }) {
           thumb: image.thumb || image.url,
           photographer: image.photographer || null,
           unsplashId: image.unsplashId || null,
+          type: image.type || 'url',
+          name: image.name || null
         }));
 
       setValidImages(validUrls);
@@ -69,6 +71,18 @@ export default function ProductCard({ product, onEdit, isManager }) {
     return 'In Stock';
   };
 
+  const getImageAttribution = () => {
+    const currentImage = validImages[currentImageIndex];
+    if (!currentImage) return null;
+
+    if (currentImage.type === 'unsplash' && currentImage.photographer) {
+      return `Photo by ${currentImage.photographer}`;
+    } else if (currentImage.type === 'uploaded' && currentImage.name) {
+      return `Uploaded: ${currentImage.name}`;
+    }
+    return null;
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="relative">
@@ -94,10 +108,10 @@ export default function ProductCard({ product, onEdit, isManager }) {
                 </span>
               </div>
             )}
-            {validImages[currentImageIndex].photographer && (
+            {getImageAttribution() && (
               <div className="absolute bottom-2 left-2">
                 <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full">
-                  Photo by {validImages[currentImageIndex].photographer}
+                  {getImageAttribution()}
                 </span>
               </div>
             )}

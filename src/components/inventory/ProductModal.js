@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiX, FiSearch, FiTrash2 } from 'react-icons/fi';
+import { FiX, FiSearch, FiTrash2, FiUpload, FiImage } from 'react-icons/fi';
 import { useInventory } from '../../contexts/InventoryContext';
+import { storage } from '../../firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import toast from 'react-hot-toast';
 
 export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
@@ -21,6 +23,8 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [previewImages, setPreviewImages] = useState([]);
 
   useEffect(() => {
     if (product) {
@@ -58,6 +62,82 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
     });
     setSelectedImages([]);
     setSearchResults([]);
+    setUploadedFiles([]);
+    setPreviewImages([]);
+  };
+
+  const uploadImagesToStorage = async (files) => {
+    try {
+      const uploadPromises = files.map(async (file) => {
+        const storageRef = ref(storage, `products/${Date.now()}_${file.name}`);
+        const snapshot = await uploadBytes(storageRef, file);
+        const downloadURL = await getDownloadURL(snapshot.ref);
+        
+        return {
+          url: downloadURL,
+          thumb: downloadURL,
+          type: 'uploaded',
+          name: file.name,
+          path: snapshot.ref.fullPath
+        };
+      });
+
+      return await Promise.all(uploadPromises);
+    } catch (error) {
+      console.error('Error uploading images:', error);
+      throw new Error('Failed to upload images');
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files || []);
+    const validFiles = files.filter(file => file && file.type.startsWith('image/'));
+    
+    if (validFiles.length === 0) {
+      toast.error('Please select valid image files');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      
+      // Create temporary preview URLs
+      const newPreviewImages = validFiles.map(file => ({
+        file,
+        previewUrl: URL.createObjectURL(file),
+        type: 'uploaded',
+        name: file.name || 'Uploaded image'
+      }));
+
+      setPreviewImages(prev => [...prev, ...newPreviewImages]);
+      
+      // Upload files to storage and get URLs
+      const uploadedImages = await uploadImagesToStorage(validFiles);
+      
+      // Validate uploaded images before adding them
+      const validUploadedImages = uploadedImages.filter(img => img && img.url && img.url.trim() !== '');
+      
+      if (validUploadedImages.length === 0) {
+        throw new Error('Failed to upload images');
+      }
+      
+      // Add uploaded images to selected images
+      setSelectedImages(prev => [...prev, ...validUploadedImages]);
+      
+      // Cleanup preview URLs
+      newPreviewImages.forEach(preview => {
+        if (preview.previewUrl) {
+          URL.revokeObjectURL(preview.previewUrl);
+        }
+      });
+      
+      toast.success('Images uploaded successfully');
+    } catch (error) {
+      console.error('Error handling file upload:', error);
+      toast.error(error.message || 'Failed to upload images');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleUnsplashSearch = async () => {
@@ -89,11 +169,14 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
   };
 
   const handleImageSelect = (image) => {
+    if (!image || !image.urls) return;
+
     const imageData = {
-      url: image.urls.regular,
-      thumb: image.urls.thumb,
-      unsplashId: image.id,
-      photographer: image.user.name,
+      url: image.urls.regular || '',
+      thumb: image.urls.thumb || image.urls.regular || '',
+      unsplashId: image.id || null,
+      photographer: image.user?.name || null,
+      type: 'unsplash'
     };
     
     setSelectedImages(prev => {
@@ -108,6 +191,13 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
       try {
         setLoading(true);
         const imageToDelete = selectedImages[index];
+        
+        // Delete from storage if it's an uploaded image
+        if (imageToDelete.type === 'uploaded' && imageToDelete.path) {
+          const imageRef = ref(storage, imageToDelete.path);
+          await deleteObject(imageRef);
+        }
+        
         await deleteProductImage(product.id, imageToDelete);
         setSelectedImages(prev => prev.filter((_, i) => i !== index));
         toast.success('Image removed successfully');
@@ -128,15 +218,30 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
     setError(null);
 
     try {
+      // Validate required fields
+      if (!formData.name?.trim()) throw new Error('Product name is required');
+      if (!formData.category?.trim()) throw new Error('Category is required');
+      if (!formData.price || isNaN(Number(formData.price))) throw new Error('Valid price is required');
+      if (!formData.stock || isNaN(Number(formData.stock))) throw new Error('Valid stock quantity is required');
+
+      // Format the product data
       const productData = {
-        name: formData.name,
-        category: formData.category,
+        name: formData.name.trim(),
+        category: formData.category.trim(),
         price: Number(formData.price),
         stock: Number(formData.stock),
-        description: formData.description,
-        supplier: formData.supplier,
+        description: formData.description?.trim() || '',
+        supplier: formData.supplier?.trim() || '',
         minStockThreshold: Number(formData.minStockThreshold) || 10,
-        images: selectedImages,
+        images: selectedImages.map(image => ({
+          url: image.url || '',
+          thumb: image.thumb || image.url || '',
+          type: image.type || 'url',
+          photographer: image.photographer || null,
+          unsplashId: image.unsplashId || null,
+          name: image.name || null,
+          path: image.path || null
+        })).filter(img => img.url && img.url.trim() !== '')
       };
 
       if (product) {
@@ -152,7 +257,7 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
       resetForm();
     } catch (error) {
       console.error('Error saving product:', error);
-      setError(error.message);
+      setError(error.message || 'Failed to save product');
       toast.error(error.message || 'Failed to save product');
     } finally {
       setIsSubmitting(false);
@@ -264,25 +369,45 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">Images</label>
-                <div className="mt-1 flex items-center space-x-2">
-                  <input
-                    type="text"
-                    value={formData.imageQuery}
-                    onChange={(e) => setFormData({ ...formData, imageQuery: e.target.value })}
-                    placeholder="Search Unsplash images..."
-                    className="flex-1 border border-gray-300 rounded-md shadow-sm p-2"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleUnsplashSearch}
-                    disabled={loading}
-                    className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
-                  >
-                    <FiSearch className="w-5 h-5" />
-                  </button>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Images</label>
+                
+                {/* Image Upload Section */}
+                <div className="mb-4">
+                  <label className="flex flex-col items-center px-4 py-6 bg-white border-2 border-gray-300 border-dashed rounded-lg cursor-pointer hover:bg-gray-50">
+                    <FiUpload className="w-8 h-8 text-gray-400" />
+                    <span className="mt-2 text-sm text-gray-500">Upload images</span>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
 
+                {/* Unsplash Search Section */}
+                <div className="mt-4">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="text"
+                      value={formData.imageQuery}
+                      onChange={(e) => setFormData({ ...formData, imageQuery: e.target.value })}
+                      placeholder="Search Unsplash images..."
+                      className="flex-1 border border-gray-300 rounded-md shadow-sm p-2"
+                    />
+                    <button
+                      type="button"
+                      onClick={handleUnsplashSearch}
+                      disabled={loading}
+                      className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md hover:bg-gray-200"
+                    >
+                      <FiSearch className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Selected Images Preview */}
                 {selectedImages.length > 0 && (
                   <div className="mt-4 grid grid-cols-3 gap-4">
                     {selectedImages.map((image, index) => (
@@ -291,6 +416,11 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                           src={image.thumb || image.url}
                           alt={`Selected ${index + 1}`}
                           className="h-24 w-full object-cover rounded-lg"
+                          onError={(e) => {
+                            e.target.onerror = null;
+                            e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
+                            e.target.className = "w-full h-24 object-contain rounded-lg bg-gray-100";
+                          }}
                         />
                         <button
                           type="button"
@@ -300,11 +430,26 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                         >
                           <FiTrash2 className="w-4 h-4" />
                         </button>
+                        {image.photographer && (
+                          <div className="absolute bottom-1 left-1 right-1">
+                            <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full block truncate">
+                              Photo by {image.photographer}
+                            </span>
+                          </div>
+                        )}
+                        {image.type === 'uploaded' && (
+                          <div className="absolute bottom-1 left-1 right-1">
+                            <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full block truncate">
+                              Uploaded: {image.name || 'Image'}
+                            </span>
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
                 )}
 
+                {/* Unsplash Search Results */}
                 {searchResults.length > 0 && (
                   <div className="mt-4">
                     <h4 className="text-sm font-medium text-gray-700 mb-2">Search Results</h4>
@@ -324,6 +469,11 @@ export default function ProductModal({ isOpen, onClose, product, onRefetch }) {
                             alt={image.alt_description}
                             className="w-full h-full object-cover"
                           />
+                          <div className="absolute bottom-1 left-1 right-1">
+                            <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full block truncate">
+                              By {image.user.name}
+                            </span>
+                          </div>
                         </div>
                       ))}
                     </div>

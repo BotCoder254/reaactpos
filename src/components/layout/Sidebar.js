@@ -67,7 +67,7 @@ export default function Sidebar() {
     { name: 'Shift Management', icon: CalendarIcon, path: '/shifts',
       subItems: [
         { name: 'Schedule Shifts', icon: FiCalendar, path: '/shifts/schedule' },
-        { name: 'Shift Calendar', icon: CalendarIcon, path: '/shifts/calendar' },
+        // { name: 'Shift Calendar', icon: CalendarIcon, path: '/shifts/calendar' },
         // { name: 'Attendance Log', icon: ClipboardDocumentListIcon, path: '/shifts/attendance' },
         // { name: 'Shift Analytics', icon: ChartBarIcon, path: '/shifts/analytics' },
         // { name: 'Break Management', icon: FiCoffee, path: '/shifts/breaks' },

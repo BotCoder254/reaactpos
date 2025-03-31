@@ -91,7 +91,13 @@ export default function POS() {
         
         productsData.forEach(product => {
           // Ensure image array exists and is valid
-          const validImages = Array.isArray(product.images) ? product.images.filter(img => img && typeof img === 'string') : [];
+          const validImages = Array.isArray(product.images) 
+            ? product.images.map(img => {
+                if (!img) return null;
+                if (typeof img === 'string') return { url: img };
+                return img;
+              }).filter(img => img && (typeof img.url === 'string'))
+            : [];
           
           fetchedProducts[product.id] = {
             ...product,
@@ -267,7 +273,18 @@ export default function POS() {
       toast.error(`${product.name} is out of stock`);
       const alternatives = await findAlternatives(product.id);
       if (alternatives.length > 0) {
-        setAlternativeProducts(alternatives);
+        // Ensure proper image structure for alternative products
+        const formattedAlternatives = alternatives.map(alt => ({
+          ...alt,
+          images: Array.isArray(alt.images) 
+            ? alt.images.map(img => {
+                if (!img) return null;
+                if (typeof img === 'string') return { url: img };
+                return img;
+              }).filter(img => img && (typeof img.url === 'string'))
+            : []
+        }));
+        setAlternativeProducts(formattedAlternatives);
         setShowAlternatives(true);
       }
       return;
@@ -290,6 +307,18 @@ export default function POS() {
       dynamicPricingRules
     );
     
+    // Ensure proper image structure when adding to cart
+    const formattedProduct = {
+      ...product,
+      images: Array.isArray(product.images) 
+        ? product.images.map(img => {
+            if (!img) return null;
+            if (typeof img === 'string') return { url: img };
+            return img;
+          }).filter(img => img && (typeof img.url === 'string'))
+        : []
+    };
+    
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.id === product.id);
       if (existingItem) {
@@ -299,7 +328,7 @@ export default function POS() {
             : item
         );
       }
-      return [...prevCart, { ...product, quantity: 1, price: dynamicPrice }];
+      return [...prevCart, { ...formattedProduct, quantity: 1, price: dynamicPrice }];
     });
 
     setProducts(prev => ({
@@ -533,14 +562,14 @@ export default function POS() {
       whileTap={{ scale: !products[product.id]?.inCart ? 0.98 : 1 }}
     >
       <div className="relative">
-        {product.images && product.images.length > 0 && product.images[0] ? (
+        {product.images && product.images.length > 0 ? (
           <img
-            src={product.images[0]}
+            src={product.images[0].url}
             alt={product.name}
             className="w-full h-32 object-cover rounded-md mb-2"
             onError={(e) => {
               e.target.onerror = null;
-              e.target.src = 'placeholder-image-url'; // Replace with your placeholder image URL
+              e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
               e.target.className = "w-full h-32 object-contain rounded-md mb-2 bg-gray-100";
             }}
           />
@@ -557,6 +586,13 @@ export default function POS() {
         {products[product.id]?.inCart && (
           <div className="absolute inset-0 bg-gray-900 bg-opacity-50 rounded-md flex items-center justify-center">
             <span className="text-white text-sm font-medium">In Cart</span>
+          </div>
+        )}
+        {product.images?.[0]?.photographer && (
+          <div className="absolute bottom-2 left-2">
+            <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full">
+              Photo by {product.images[0].photographer}
+            </span>
           </div>
         )}
       </div>
@@ -638,20 +674,27 @@ export default function POS() {
                       }}
                     >
                       <div className="relative">
-                        {product.images && product.images.length > 0 && product.images[0] ? (
+                        {product.images && product.images.length > 0 ? (
                           <img
-                            src={product.images[0]}
+                            src={product.images[0].url}
                             alt={product.name}
                             className="w-full h-32 object-cover rounded-md mb-2"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src = 'placeholder-image-url'; // Replace with your placeholder image URL
+                              e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
                               e.target.className = "w-full h-32 object-contain rounded-md mb-2 bg-gray-100";
                             }}
                           />
                         ) : (
                           <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded-md mb-2">
                             <FiPackage className="w-8 h-8 text-gray-400" />
+                          </div>
+                        )}
+                        {product.images?.[0]?.photographer && (
+                          <div className="absolute bottom-2 left-2">
+                            <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full">
+                              Photo by {product.images[0].photographer}
+                            </span>
                           </div>
                         )}
                       </div>
