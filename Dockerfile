@@ -1,5 +1,5 @@
 # Build stage
-FROM node:16-alpine as build
+FROM node:18-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -7,8 +7,8 @@ WORKDIR /app
 # Copy package files
 COPY package*.json ./
 
-# Install dependencies
-RUN npm install
+# Install dependencies with legacy peer deps flag to handle version conflicts
+RUN npm install --legacy-peer-deps
 
 # Copy project files
 COPY . .
@@ -17,16 +17,22 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
+FROM node:18-alpine AS runner
 
-# Copy built assets from build stage
-COPY --from=build /app/build /usr/share/nginx/html
+WORKDIR /app
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy necessary files from builder
+COPY --from=builder /app/next.config.js ./
+COPY --from=builder /app/public ./public
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
-# Expose port 80
-EXPOSE 80
+# Set environment variables
+ENV NODE_ENV=production
+ENV PORT=3000
 
-# Start nginx
-CMD ["nginx", "-g", "daemon off;"] 
+# Expose the port the app runs on
+EXPOSE 3000
+
+# Start the application
+CMD ["node", "server.js"] 
