@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { useAuth } from './AuthContext';
 import {
   getShifts,
@@ -10,8 +10,14 @@ import {
   createShift,
   updateShift,
   deleteShift,
-  markNotificationAsRead
+  markNotificationAsRead,
+  updateBreakStatus as updateBreakStatusAPI,
+  getBreakHistory,
+  getActiveBreak
 } from '../utils/shiftQueries';
+import toast from 'react-hot-toast';
+import { addDoc, collection, serverTimestamp, updateDoc, doc } from 'firebase/firestore';
+import { db } from '../firebase';
 
 const ShiftContext = createContext();
 
@@ -25,75 +31,94 @@ export function ShiftProvider({ children }) {
   const [attendance, setAttendance] = useState([]);
   const [analytics, setAnalytics] = useState(null);
   const [notifications, setNotifications] = useState([]);
+  const [breaks, setBreaks] = useState([]);
+  const [breakHistory, setBreakHistory] = useState([]);
+  const [activeBreak, setActiveBreak] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (!currentUser) return;
+  const refreshShifts = useCallback(async () => {
+    if (!currentUser?.uid) return;
 
-    const fetchShiftData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Get shifts for the current week
-        const startDate = new Date();
-        startDate.setDate(startDate.getDate() - startDate.getDay()); // Start of week
-        const endDate = new Date(startDate);
-        endDate.setDate(endDate.getDate() + 6); // End of week
-
-        const [shiftsData, attendanceData, notificationsData] = await Promise.all([
-          getShifts(startDate, endDate, userRole === 'cashier' ? currentUser.uid : null),
-          getAttendanceLogs(startDate, endDate, userRole === 'cashier' ? currentUser.uid : null),
-          getNotifications()
-        ]);
-
-        setShifts(shiftsData);
-        setAttendance(attendanceData);
-        setNotifications(notificationsData);
-
-        // Only fetch analytics for managers
-        if (userRole === 'manager') {
-          const analyticsData = await getShiftAnalytics(startDate, endDate);
-          setAnalytics(analyticsData);
-        }
-      } catch (err) {
-        console.error('Error fetching shift data:', err);
-        setError('Failed to load shift data');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchShiftData();
-  }, [currentUser, userRole]);
-
-  const handleClockIn = async (shiftId) => {
     try {
-      await clockIn(shiftId);
-      // Refresh attendance data
+      setLoading(true);
+      setError(null);
+
+      // Get current week's date range
       const startDate = new Date();
       startDate.setDate(startDate.getDate() - startDate.getDay());
       const endDate = new Date(startDate);
       endDate.setDate(endDate.getDate() + 6);
+
+      // Fetch shifts based on role
+      const shiftsData = await getShifts(
+        startDate,
+        endDate,
+        userRole === 'cashier' ? currentUser.uid : null
+      );
+
+      if (Array.isArray(shiftsData)) {
+        setShifts(shiftsData);
+      } else {
+        setShifts([]);
+      }
+
+      // Fetch attendance logs
       const attendanceData = await getAttendanceLogs(startDate, endDate, userRole === 'cashier' ? currentUser.uid : null);
       setAttendance(attendanceData);
+
+      // Fetch notifications
+      const notificationsData = await getNotifications(currentUser.uid);
+      setNotifications(notificationsData);
+
+      // Fetch break history for the current user
+      if (userRole === 'cashier') {
+        const breakData = await getBreakHistory(currentUser.uid, startDate, endDate);
+        if (Array.isArray(breakData)) {
+          setBreakHistory(breakData);
+        }
+
+        const currentBreak = await getActiveBreak(currentUser.uid);
+        setActiveBreak(currentBreak);
+      }
+
+      // Only fetch analytics for managers
+      if (userRole === 'manager') {
+        try {
+          const analyticsData = await getShiftAnalytics(startDate, endDate);
+          setAnalytics(analyticsData);
+        } catch (err) {
+          console.error('Error fetching analytics:', err);
+          setAnalytics(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching shift data:', error);
+      setError('Failed to load shift data. Please try refreshing.');
+      toast.error('Failed to load shift data');
+    } finally {
+      setLoading(false);
+    }
+  }, [currentUser, userRole]);
+
+  useEffect(() => {
+    refreshShifts();
+  }, [refreshShifts]);
+
+  const handleClockIn = async (shiftId, pin) => {
+    try {
+      await clockIn(shiftId, pin);
+      await refreshShifts();
     } catch (err) {
       console.error('Error clocking in:', err);
       throw err;
     }
   };
 
-  const handleClockOut = async (attendanceId) => {
+  const handleClockOut = async (attendanceId, pin) => {
     try {
-      await clockOut(attendanceId);
-      // Refresh attendance data
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - startDate.getDay());
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 6);
-      const attendanceData = await getAttendanceLogs(startDate, endDate, userRole === 'cashier' ? currentUser.uid : null);
-      setAttendance(attendanceData);
+      await clockOut(attendanceId, pin);
+      await refreshShifts();
     } catch (err) {
       console.error('Error clocking out:', err);
       throw err;
@@ -102,46 +127,46 @@ export function ShiftProvider({ children }) {
 
   const handleCreateShift = async (shiftData) => {
     try {
-      await createShift(shiftData);
-      // Refresh shifts
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - startDate.getDay());
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 6);
-      const shiftsData = await getShifts(startDate, endDate, userRole === 'cashier' ? currentUser.uid : null);
-      setShifts(shiftsData);
-    } catch (err) {
-      console.error('Error creating shift:', err);
-      throw err;
+      if (userRole !== 'manager') {
+        throw new Error('Only managers can create shifts');
+      }
+
+      const newShift = await addDoc(collection(db, 'shifts'), {
+        ...shiftData,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+
+      await refreshShifts();
+      return newShift.id;
+    } catch (error) {
+      console.error('Error creating shift:', error);
+      throw error;
     }
   };
 
   const handleUpdateShift = async (shiftId, shiftData) => {
     try {
-      await updateShift(shiftId, shiftData);
-      // Refresh shifts
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - startDate.getDay());
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 6);
-      const shiftsData = await getShifts(startDate, endDate, userRole === 'cashier' ? currentUser.uid : null);
-      setShifts(shiftsData);
-    } catch (err) {
-      console.error('Error updating shift:', err);
-      throw err;
+      if (userRole !== 'manager') {
+        throw new Error('Only managers can update shifts');
+      }
+
+      await updateDoc(doc(db, 'shifts', shiftId), {
+        ...shiftData,
+        updatedAt: serverTimestamp()
+      });
+
+      await refreshShifts();
+    } catch (error) {
+      console.error('Error updating shift:', error);
+      throw error;
     }
   };
 
   const handleDeleteShift = async (shiftId) => {
     try {
       await deleteShift(shiftId);
-      // Refresh shifts
-      const startDate = new Date();
-      startDate.setDate(startDate.getDate() - startDate.getDay());
-      const endDate = new Date(startDate);
-      endDate.setDate(endDate.getDate() + 6);
-      const shiftsData = await getShifts(startDate, endDate, userRole === 'cashier' ? currentUser.uid : null);
-      setShifts(shiftsData);
+      await refreshShifts();
     } catch (err) {
       console.error('Error deleting shift:', err);
       throw err;
@@ -162,19 +187,42 @@ export function ShiftProvider({ children }) {
     }
   };
 
+  const handleUpdateBreakStatus = async (breakData) => {
+    try {
+      const result = await updateBreakStatusAPI(breakData);
+      if (result.ok) {
+        if (breakData.status === 'active') {
+          setActiveBreak(result.data);
+        } else if (breakData.status === 'completed' || breakData.status === 'cancelled') {
+          setActiveBreak(null);
+        }
+        await refreshShifts();
+      }
+      return result;
+    } catch (error) {
+      console.error('Error updating break:', error);
+      throw error;
+    }
+  };
+
   const value = {
     shifts,
     attendance,
     analytics,
     notifications,
+    breaks,
+    breakHistory,
+    activeBreak,
     loading,
     error,
+    refreshShifts,
     clockIn: handleClockIn,
     clockOut: handleClockOut,
     createShift: handleCreateShift,
     updateShift: handleUpdateShift,
     deleteShift: handleDeleteShift,
-    markNotificationAsRead: handleMarkNotificationAsRead
+    markNotificationAsRead: handleMarkNotificationAsRead,
+    updateBreakStatus: handleUpdateBreakStatus
   };
 
   return (

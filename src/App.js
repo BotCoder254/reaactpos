@@ -45,6 +45,15 @@ import RoleRequests from './components/roles/RoleRequests';
 import FraudMonitoring from './components/fraud/FraudMonitoring';
 import Shifts from './pages/Shifts';
 
+// Import Shift Management Components
+import ShiftCalendar from './components/shifts/ShiftCalendar';
+import ShiftSchedule from './components/shifts/ShiftSchedule';
+import AttendanceLog from './components/shifts/AttendanceLog';
+import ShiftAnalytics from './components/shifts/ShiftAnalytics';
+import ShiftBreaks from './components/shifts/ShiftBreaks';
+import ShiftClock from './components/shifts/ShiftClock';
+import ShiftNotifications from './components/shifts/ShiftNotifications';
+
 function AppContent() {
   const location = useLocation();
   const { userRole } = useAuth();
@@ -123,11 +132,62 @@ function AppContent() {
                   {userRole === 'manager' ? <InventoryDashboard /> : <Navigate to="/" replace />}
                 </PrivateRoute>
               } />
-              <Route path="/shift-management" element={
+              <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
+              <Route path="/staff" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <ShiftManagement /> : <Navigate to="/" replace />}
+                  {userRole === 'manager' ? <Staff /> : <Navigate to="/" replace />}
                 </PrivateRoute>
               } />
+              <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
+              <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
+              <Route path="/discounts" element={
+                <PrivateRoute>
+                  {userRole === 'manager' ? <Discounts /> : <Navigate to="/" replace />}
+                </PrivateRoute>
+              } />
+              
+              {/* Shift Management Routes */}
+              <Route path="/shifts" element={<PrivateRoute><Shifts /></PrivateRoute>} />
+              
+              {/* Manager Shift Routes */}
+              <Route path="/shifts/schedule" element={
+                <PrivateRoute>
+                  {userRole === 'manager' ? <ShiftSchedule /> : <Navigate to="/shifts" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/shifts/calendar" element={
+                <PrivateRoute>
+                  <ShiftCalendar />
+                </PrivateRoute>
+              } />
+              <Route path="/shifts/attendance" element={
+                <PrivateRoute>
+                  <AttendanceLog />
+                </PrivateRoute>
+              } />
+              <Route path="/shifts/analytics" element={
+                <PrivateRoute>
+                  {userRole === 'manager' ? <ShiftAnalytics /> : <Navigate to="/shifts" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/shifts/breaks" element={
+                <PrivateRoute>
+                  <ShiftBreaks />
+                </PrivateRoute>
+              } />
+              
+              {/* Cashier Shift Routes */}
+              <Route path="/shifts/clock" element={
+                <PrivateRoute>
+                  {userRole === 'cashier' ? <ShiftClock /> : <Navigate to="/shifts" replace />}
+                </PrivateRoute>
+              } />
+              <Route path="/shifts/notifications" element={
+                <PrivateRoute>
+                  <ShiftNotifications />
+                </PrivateRoute>
+              } />
+              
               <Route path="/role-requests" element={
                 <PrivateRoute>
                   {userRole === 'manager' ? <RoleRequests /> : <Navigate to="/" replace />}
@@ -138,20 +198,6 @@ function AppContent() {
                   {userRole === 'manager' ? <FraudMonitoring /> : <Navigate to="/" replace />}
                 </PrivateRoute>
               } />
-              <Route path="/products" element={<PrivateRoute><Products /></PrivateRoute>} />
-              <Route path="/staff" element={
-                <PrivateRoute>
-                  {userRole === 'manager' ? <Staff /> : <Navigate to="/" replace />}
-                </PrivateRoute>
-              } />
-              <Route path="/orders" element={<PrivateRoute><Orders /></PrivateRoute>} />
-              <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
-              <Route path="/discounts" element={
-                  <PrivateRoute>
-                  {userRole === 'manager' ? <Discounts /> : <Navigate to="/" replace />}
-                  </PrivateRoute>
-              } />
-              <Route path="/shifts" element={<PrivateRoute><Shifts /></PrivateRoute>} />
             </Routes>
           </div>
         </main>
@@ -168,19 +214,19 @@ export default function App() {
       <AuthProvider>
         <RoleProvider>
           <FraudDetectionProvider>
-        <SalesGoalsProvider>
-          <HeldTransactionsProvider>
-            <RefundProvider>
-              <LoyaltyProvider>
-                <InventoryProvider>
+            <SalesGoalsProvider>
+              <HeldTransactionsProvider>
+                <RefundProvider>
+                  <LoyaltyProvider>
+                    <InventoryProvider>
                       <ShiftProvider>
-                  <AppContent />
+                        <AppContent />
                       </ShiftProvider>
-                </InventoryProvider>
-              </LoyaltyProvider>
-            </RefundProvider>
-          </HeldTransactionsProvider>
-        </SalesGoalsProvider>
+                    </InventoryProvider>
+                  </LoyaltyProvider>
+                </RefundProvider>
+              </HeldTransactionsProvider>
+            </SalesGoalsProvider>
           </FraudDetectionProvider>
         </RoleProvider>
       </AuthProvider>

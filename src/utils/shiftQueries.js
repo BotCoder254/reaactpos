@@ -101,31 +101,35 @@ export const getShifts = async (startDate, endDate, employeeId = null) => {
     const shiftsRef = collection(db, 'shifts');
     let queryRef;
 
-    // Build query based on filters
+    // Simplified query to avoid index requirements
     if (employeeId) {
-      // For cashier view - filter by employeeId first
       queryRef = query(
         shiftsRef,
         where('employeeId', '==', employeeId),
-        where('startTime', '>=', startDate),
-        where('startTime', '<=', endDate),
         orderBy('startTime', 'desc')
       );
     } else {
-      // For manager view - just filter by date range
       queryRef = query(
         shiftsRef,
-        where('startTime', '>=', startDate),
-        where('startTime', '<=', endDate),
         orderBy('startTime', 'desc')
       );
     }
 
     const snapshot = await getDocs(queryRef);
     
+    // Filter dates in memory instead of in query
+    const filteredDocs = snapshot.docs.filter(doc => {
+      const data = doc.data();
+      const shiftStart = data.startTime?.toDate();
+      if (!shiftStart) return false;
+      const filterStart = new Date(startDate);
+      const filterEnd = new Date(endDate);
+      return shiftStart >= filterStart && shiftStart <= filterEnd;
+    });
+    
     // Get all unique employee IDs
     const employeeIds = new Set();
-    snapshot.docs.forEach(doc => {
+    filteredDocs.forEach(doc => {
       const data = doc.data();
       if (data.employeeId) employeeIds.add(data.employeeId);
     });
@@ -150,29 +154,39 @@ export const getShifts = async (startDate, endDate, employeeId = null) => {
       });
     }
 
-    return snapshot.docs.map(doc => {
+    const mappedShifts = filteredDocs.map(doc => {
       const data = doc.data();
       const employeeDetail = employeeDetails[data.employeeId] || {};
+      
+      // Ensure all date fields are properly converted
+      const startTime = data.startTime?.toDate();
+      const endTime = data.endTime?.toDate();
+      const createdAt = data.createdAt?.toDate();
+      const updatedAt = data.updatedAt?.toDate();
+
       return {
         id: doc.id,
         ...data,
-        startTime: data.startTime?.toDate().toISOString(),
-        endTime: data.endTime?.toDate().toISOString(),
+        startTime: startTime ? startTime.toISOString() : null,
+        endTime: endTime ? endTime.toISOString() : null,
+        createdAt: createdAt ? createdAt.toISOString() : null,
+        updatedAt: updatedAt ? updatedAt.toISOString() : null,
         cashierName: employeeDetail.name || data.cashierName || 'Unknown',
         cashierEmail: employeeDetail.email || data.cashierEmail,
         employeeId: data.employeeId
       };
     });
+
+    // Sort shifts by start time
+    return mappedShifts.sort((a, b) => {
+      const dateA = new Date(a.startTime || 0);
+      const dateB = new Date(b.startTime || 0);
+      return dateA - dateB;
+    });
   } catch (error) {
     console.error('Error fetching shifts:', error);
-    // Check if it's an index error and provide guidance
-    if (error.code === 'failed-precondition') {
-      toast.error('System configuration needed. Please contact administrator.');
-      console.error('Index needed:', error.message);
-    } else {
-      toast.error('Failed to fetch shifts');
-    }
-    throw error;
+    toast.error('Failed to fetch shifts');
+    return [];
   }
 };
 
@@ -577,33 +591,26 @@ const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 // Cashier Management
 export const getCashiers = async () => {
   try {
-    if (cashiersCache && lastCashiersFetch && (Date.now() - lastCashiersFetch) < CACHE_DURATION) {
-      return cashiersCache;
-    }
-
     const q = query(
       collection(db, 'users'),
       where('role', '==', 'cashier')
     );
     
     const querySnapshot = await getDocs(q);
-    const cashiers = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      name: doc.data().name || doc.data().displayName || 'Unknown',
-      email: doc.data().email || '',
-      role: doc.data().role
-    }));
-
-    cashiersCache = cashiers;
-    lastCashiersFetch = Date.now();
-
-    return cashiers;
+    if (!querySnapshot.empty) {
+      const cashiers = querySnapshot.docs.map(doc => ({
+        id: doc.id,
+        name: doc.data().name || doc.data().displayName || 'Unknown',
+        email: doc.data().email || '',
+        role: doc.data().role || 'cashier'
+      }));
+      return cashiers;
+    }
+    return [];
   } catch (error) {
     console.error('Error getting cashiers:', error);
-    if (cashiersCache) {
-      return cashiersCache;
-    }
-    throw error;
+    toast.error('Failed to fetch cashiers');
+    return [];
   }
 };
 
@@ -624,6 +631,153 @@ export const endShift = async (shiftId) => {
   } catch (error) {
     console.error('Error ending shift:', error);
     toast.error('Failed to end shift');
+    throw error;
+  }
+};
+
+// Break Management
+export const updateBreakStatus = async (breakData) => {
+  try {
+    const { employeeId, breakId, status, type, duration } = breakData;
+
+    if (!employeeId) {
+      throw new Error('Employee ID is required');
+    }
+
+    // For new break
+    if (!breakId) {
+      if (!type || !duration) {
+        throw new Error('Break type and duration are required for new breaks');
+      }
+
+      const newBreak = {
+        employeeId,
+        type,
+        duration,
+        startTime: serverTimestamp(),
+        status: 'active',
+        createdAt: serverTimestamp()
+      };
+
+      const docRef = await addDoc(collection(db, 'breaks'), newBreak);
+      return {
+        ok: true,
+        data: {
+          id: docRef.id,
+          ...newBreak,
+          startTime: new Date()
+        }
+      };
+    }
+
+    // For existing break
+    const breakRef = doc(db, 'breaks', breakId);
+    const breakDoc = await getDoc(breakRef);
+
+    if (!breakDoc.exists()) {
+      throw new Error('Break record not found');
+    }
+
+    const updateData = {
+      status,
+      updatedAt: serverTimestamp()
+    };
+
+    if (status === 'completed') {
+      updateData.endTime = serverTimestamp();
+    }
+
+    await updateDoc(breakRef, updateData);
+
+    return {
+      ok: true,
+      data: {
+        id: breakId,
+        ...breakDoc.data(),
+        ...updateData
+      }
+    };
+  } catch (error) {
+    console.error('Error updating break status:', error);
+    throw error;
+  }
+};
+
+export const getBreakHistory = async (employeeId, startDate, endDate) => {
+  try {
+    if (!employeeId) {
+      throw new Error('Employee ID is required');
+    }
+
+    const breaksRef = collection(db, 'breaks');
+    // Simple query without compound index
+    const queryRef = query(
+      breaksRef,
+      where('employeeId', '==', employeeId),
+      orderBy('startTime', 'desc')
+    );
+
+    const snapshot = await getDocs(queryRef);
+    
+    // Filter dates in memory
+    const filteredDocs = snapshot.docs.filter(doc => {
+      if (!startDate || !endDate) return true;
+      const data = doc.data();
+      const breakStart = data.startTime?.toDate();
+      return breakStart && breakStart >= startDate && breakStart <= endDate;
+    });
+    
+    return filteredDocs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        startTime: data.startTime?.toDate()?.toISOString() || null,
+        endTime: data.endTime?.toDate()?.toISOString() || null,
+        createdAt: data.createdAt?.toDate()?.toISOString() || null,
+        updatedAt: data.updatedAt?.toDate()?.toISOString() || null
+      };
+    });
+  } catch (error) {
+    console.error('Error fetching break history:', error);
+    toast.error('Failed to fetch break history');
+    return [];
+  }
+};
+
+export const getActiveBreak = async (employeeId) => {
+  try {
+    if (!employeeId) {
+      throw new Error('Employee ID is required');
+    }
+
+    const breaksRef = collection(db, 'breaks');
+    const queryRef = query(
+      breaksRef,
+      where('employeeId', '==', employeeId),
+      where('status', '==', 'active'),
+      orderBy('startTime', 'desc'),
+      limit(1)
+    );
+
+    const snapshot = await getDocs(queryRef);
+    
+    if (snapshot.empty) {
+      return null;
+    }
+
+    const doc = snapshot.docs[0];
+    const data = doc.data();
+    return {
+      id: doc.id,
+      ...data,
+      startTime: data.startTime?.toDate()?.toISOString() || null,
+      endTime: data.endTime?.toDate()?.toISOString() || null,
+      createdAt: data.createdAt?.toDate()?.toISOString() || null,
+      updatedAt: data.updatedAt?.toDate()?.toISOString() || null
+    };
+  } catch (error) {
+    console.error('Error fetching active break:', error);
     throw error;
   }
 }; 
