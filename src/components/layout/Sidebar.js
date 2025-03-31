@@ -26,7 +26,7 @@ import {
   BellIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
-import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus, FiClock, FiCalendar, FiCoffee } from 'react-icons/fi';
+import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus, FiClock, FiCalendar, FiCoffee, FiFileText } from 'react-icons/fi';
 import { useRole } from '../../contexts/RoleContext';
 import { classNames } from '../../utils/classNames';
 import { NavLink } from 'react-router-dom';
@@ -80,7 +80,14 @@ export default function Sidebar() {
     { name: 'Loyalty Program', icon: FiStar, path: '/loyalty' },
     { name: 'Settings', icon: CogIcon, path: '/settings' },
     { name: 'Refunds', icon: FiRefreshCcw, path: '/refunds' },
-    { name: 'Fraud Monitoring', icon: ShieldExclamationIcon, path: '/fraud-monitoring' }
+    { name: 'Fraud Monitoring', icon: ShieldExclamationIcon, path: '/fraud-monitoring' },
+    {
+      name: 'Invoice Settings',
+      title: 'Invoice Settings',
+      icon: FiFileText,
+      path: '/invoice-settings',
+      description: 'Customize invoice templates and branding'
+    },
   ];
 
   const cashierNavItems = [
@@ -107,7 +114,14 @@ export default function Sidebar() {
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Loyalty Program', icon: FiStar, path: '/loyalty' },
     { name: 'Settings', icon: CogIcon, path: '/settings' },
-    { name: 'Refund Request', icon: FiRefreshCcw, path: '/refunds' }
+    { name: 'Refund Request', icon: FiRefreshCcw, path: '/refunds' },
+    {
+      name: 'Invoice Options',
+      title: 'Invoice Options',
+      icon: FiFileText,
+      path: '/invoice-options',
+      description: 'Select invoice format and add messages'
+    },
   ];
 
   const navItems = effectiveRole === 'manager' ? managerNavItems : cashierNavItems;

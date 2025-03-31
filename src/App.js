@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate, useNavigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import Sidebar from './components/layout/Sidebar';
 import Dashboard from './pages/Dashboard';
@@ -44,6 +44,9 @@ import ShiftManagement from './pages/ShiftManagement';
 import RoleRequests from './components/roles/RoleRequests';
 import FraudMonitoring from './components/fraud/FraudMonitoring';
 import Shifts from './pages/Shifts';
+import { InvoiceCustomizationProvider } from './contexts/InvoiceCustomizationContext';
+import InvoiceCustomizer from './components/invoices/InvoiceCustomizer';
+import CashierInvoiceOptions from './components/invoices/CashierInvoiceOptions';
 
 // Import Shift Management Components
 import ShiftCalendar from './components/shifts/ShiftCalendar';
@@ -56,6 +59,7 @@ import ShiftNotifications from './components/shifts/ShiftNotifications';
 
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();
   const { effectiveRole } = useRole();
   const { currentUser } = useAuth();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
@@ -191,6 +195,24 @@ function AppContent() {
                 </PrivateRoute>
               } />
               <Route path="/shifts/notifications" element={<PrivateRoute><ShiftNotifications /></PrivateRoute>} />
+
+              {/* Invoice Customization Routes */}
+              <Route path="/invoice-settings" element={
+                <PrivateRoute>
+                  {handleRoleAccess(InvoiceCustomizer, 'manager')}
+                </PrivateRoute>
+              } />
+              <Route path="/invoice-options" element={
+                <PrivateRoute>
+                  <CashierInvoiceOptions 
+                    onClose={() => navigate('/')} 
+                    onApply={(options) => {
+                      // Handle applying options
+                      navigate('/');
+                    }} 
+                  />
+                </PrivateRoute>
+              } />
             </Routes>
           </div>
         </main>
@@ -213,7 +235,9 @@ export default function App() {
                   <LoyaltyProvider>
                     <InventoryProvider>
                       <ShiftProvider>
-                        <AppContent />
+                        <InvoiceCustomizationProvider>
+                          <AppContent />
+                        </InvoiceCustomizationProvider>
                       </ShiftProvider>
                     </InventoryProvider>
                   </LoyaltyProvider>
