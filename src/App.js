@@ -47,6 +47,7 @@ import Shifts from './pages/Shifts';
 import { InvoiceCustomizationProvider } from './contexts/InvoiceCustomizationContext';
 import InvoiceCustomizer from './components/invoices/InvoiceCustomizer';
 import CashierInvoiceOptions from './components/invoices/CashierInvoiceOptions';
+import InvoicePreview from './components/invoices/InvoicePreview';
 
 // Import Shift Management Components
 import ShiftCalendar from './components/shifts/ShiftCalendar';
@@ -91,6 +92,7 @@ function AppContent() {
               <Route path="/pos" element={<PrivateRoute><POS /></PrivateRoute>} />
               <Route path="/sales" element={<PrivateRoute><Sales /></PrivateRoute>} />
               <Route path="/customers" element={<PrivateRoute><Customers /></PrivateRoute>} />
+              <Route path="/receipt/:id" element={<PrivateRoute><InvoicePreview /></PrivateRoute>} />
               
               {/* Manager-only routes */}
               <Route path="/analytics" element={

@@ -27,7 +27,7 @@ import { createSale, emailReceipt } from '../utils/salesQueries';
 import { searchCustomers, quickSearchCustomers, updateCustomerAfterPurchase } from '../utils/customerQueries';
 import { getActiveDiscounts, calculateDiscount } from '../utils/discountQueries';
 import CustomerModal from '../components/customers/CustomerModal';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, getDocs, query, where, addDoc } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getEmployeeStats } from '../utils/employeeQueries';
 import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../utils/dynamicPricingQueries';
@@ -36,11 +36,32 @@ import ChangeCalculator from '../components/transactions/ChangeCalculator';
 import { toast } from 'react-hot-toast';
 import { useInventory } from '../contexts/InventoryContext';
 import TransactionVerification from '../components/fraud/TransactionVerification';
+import { formatCurrency, formatDate, formatInvoiceNumber } from '../utils/formatters';
+import { sendDigitalReceipt } from '../utils/digitalReceiptQueries';
+import { useInvoiceCustomization } from '../contexts/InvoiceCustomizationContext';
 
 const TAX_RATE = 0.1; // 10% tax rate
 
 const calculateTax = (subtotal) => {
   return subtotal * TAX_RATE;
+};
+
+const saveSale = async (saleData) => {
+  try {
+    const saleRef = await addDoc(collection(db, 'sales'), {
+      ...saleData,
+      createdAt: new Date(),
+      updatedAt: new Date()
+    });
+
+    return {
+      id: saleRef.id,
+      ...saleData
+    };
+  } catch (error) {
+    console.error('Error saving sale:', error);
+    throw new Error('Failed to save sale');
+  }
 };
 
 export default function POS() {
@@ -74,10 +95,14 @@ export default function POS() {
   const [currentPaymentMethod, setCurrentPaymentMethod] = useState(null);
   const { loyaltyProgram, addPoints } = useLoyalty();
   const [loyaltyDiscount, setLoyaltyDiscount] = useState(0);
-  const { checkLowStock, findAlternatives } = useInventory();
+  const { checkLowStock, findAlternatives, updateInventory } = useInventory();
   const [alternativeProducts, setAlternativeProducts] = useState([]);
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [currentTransaction, setCurrentTransaction] = useState(null);
+  const [appliedDiscounts, setAppliedDiscounts] = useState([]);
+  const { settings: invoiceSettings } = useInvoiceCustomization();
+  const [currentSale, setCurrentSale] = useState(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -380,55 +405,76 @@ export default function POS() {
     }
   };
 
+  const calculateSubtotal = (items) => {
+    return items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  };
+
+  const resetCart = () => {
+    setCart([]);
+    setCurrentSale(null);
+    setSelectedPaymentMethod('cash');
+  };
+
+  const updateInventoryAfterSale = async (items) => {
+    try {
+      for (const item of items) {
+        await updateInventory(item.id, -item.quantity);
+      }
+    } catch (error) {
+      console.error('Error updating inventory:', error);
+      toast.error('Failed to update inventory');
+    }
+  };
+
+  const handleEmailReceipt = async (email) => {
+    if (!currentSale?.id) {
+      toast.error('No sale to send receipt for');
+      return;
+    }
+
+    try {
+      await sendDigitalReceipt(currentSale.id, email);
+      toast.success('Digital receipt sent successfully');
+    } catch (error) {
+      console.error('Error sending digital receipt:', error);
+      toast.error('Failed to send digital receipt');
+    }
+  };
+
   const handlePaymentComplete = async (cashReceived, change) => {
     try {
-      const totals = calculateTotal();
-      
-      // Create the sale record
+      setLoading(true);
+      setError(null);
+
       const saleData = {
         items: cart,
-        subtotal: totals.subtotal,
-        discount: totals.discount,
-        tax: totals.tax,
-        total: totals.total,
-        cashReceived,
-        change,
-        paymentMethod: currentPaymentMethod || 'cash',
-        cashierId: currentUser.uid,
-        cashierName: currentUser.displayName || currentUser.email || 'Unknown Cashier',
+        total: calculateTotal(),
+        paymentMethod: selectedPaymentMethod,
+        cashReceived: parseFloat(cashReceived),
+        change: parseFloat(change),
         timestamp: new Date(),
-        customer: selectedCustomer || null,
-        discountApplied: selectedDiscount ? {
-          id: selectedDiscount.id,
-          name: selectedDiscount.name,
-          value: totals.discount
-        } : null
+        status: 'completed'
       };
 
-      // If there's a loyalty account and points to be earned
-      if (selectedCustomer?.loyaltyAccount && loyaltyProgram) {
-        const pointsToEarn = Math.floor(totals.total * (loyaltyProgram.pointsPerDollar || 1));
-        if (pointsToEarn > 0) {
-          await addPoints(selectedCustomer.loyaltyAccount.id, pointsToEarn, totals.total);
-          saleData.loyaltyPoints = pointsToEarn;
-        }
-      }
+      // Save sale to database
+      const savedSale = await saveSale(saleData);
+      setCurrentSale(savedSale);
 
-      // Create the sale
-      await createSale(saleData);
+      // Update inventory
+      await updateInventoryAfterSale(cart);
 
-      // Reset the cart and related states
-      setCart([]);
-      setSelectedCustomer(null);
-      setDiscountAmount(0);
-      setTaxAmount(0);
-      setLoyaltyDiscount(0);
+      // Reset cart
+      resetCart();
 
-      // Show success message
-      toast.success('Sale completed successfully!');
+      toast.success('Sale completed successfully');
+      return savedSale;
     } catch (error) {
       console.error('Error completing sale:', error);
+      setError('Failed to complete sale');
       toast.error('Failed to complete sale');
+      throw error;
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -438,37 +484,6 @@ export default function POS() {
       setIsChangeCalculatorOpen(true);
     } else {
       handlePaymentComplete(calculateTotal().total, 0);
-    }
-  };
-
-  const handleEmailReceipt = async (email) => {
-    try {
-      const saleData = {
-        items: cart,
-        subtotal: calculateTotal().subtotal,
-        discount: calculateTotal().discount,
-        discountName: selectedDiscount?.name,
-        tax: calculateTax(calculateTotal().subtotal),
-        total: calculateTotal().total,
-        email,
-        customerName: selectedCustomer?.name,
-        cashierName: currentUser.email,
-        timestamp: new Date(),
-        id: Date.now().toString()
-      };
-
-      // Generate receipt HTML with branding
-      const receiptHTML = generateReceiptHTML(receiptBranding, saleData);
-      
-      await emailReceipt({
-        ...saleData,
-        receiptHTML
-      });
-      
-      alert('Receipt sent successfully!');
-    } catch (error) {
-      console.error('Error sending receipt:', error);
-      alert('Failed to send receipt');
     }
   };
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { FiX, FiDownload, FiPrinter, FiMail } from 'react-icons/fi';
-import { formatCurrency } from '../../utils/formatCurrency';
+import { formatCurrency, formatDate } from '../../utils/formatters';
 
 export default function InvoicePreview({ settings, companyInfo, sale = {}, onClose, onPrint, onDownload, onEmail }) {
   // Default values for undefined sale
@@ -38,18 +38,15 @@ export default function InvoicePreview({ settings, companyInfo, sale = {}, onClo
   };
 
   const calculateSubtotal = () => {
-    return actualSale.items.reduce((total, item) => total + (item.quantity * item.price), 0);
+    return (actualSale.items || []).reduce((sum, item) => sum + (item.price * item.quantity), 0);
   };
 
   const calculateTax = () => {
-    return actualSale.tax || (calculateSubtotal() * 0.1); // Default 10% tax if not specified
+    return calculateSubtotal() * (settings?.taxRate || 0.1);
   };
 
   const calculateTotal = () => {
-    const subtotal = calculateSubtotal();
-    const tax = calculateTax();
-    const discount = actualSale.discount?.amount || 0;
-    return subtotal + tax - discount;
+    return calculateSubtotal() + calculateTax() - (actualSale.discount || 0);
   };
 
   return (
@@ -69,9 +66,19 @@ export default function InvoicePreview({ settings, companyInfo, sale = {}, onClo
           exit="hidden"
         >
           {/* Header */}
-          <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center">
-            <h2 className="text-xl font-bold text-gray-900">Invoice Preview</h2>
+          <div className="sticky top-0 bg-white border-b border-gray-200 p-4 flex justify-between items-center print:hidden">
+            <h2 className="text-xl font-bold text-gray-900">
+              {settings.digitalReceipts?.enabled ? 'Digital Receipt' : 'Invoice Preview'}
+            </h2>
             <div className="flex items-center space-x-2">
+              {settings.digitalReceipts?.enabled && (
+                <div className="text-sm text-green-600 flex items-center mr-4">
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  Paperless
+                </div>
+              )}
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -80,14 +87,16 @@ export default function InvoicePreview({ settings, companyInfo, sale = {}, onClo
               >
                 <FiDownload className="w-5 h-5" />
               </motion.button>
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={onPrint}
-                className="p-2 hover:bg-gray-100 rounded-full text-gray-600"
-              >
-                <FiPrinter className="w-5 h-5" />
-              </motion.button>
+              {!settings.digitalReceipts?.defaultToPaperless && (
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={onPrint}
+                  className="p-2 hover:bg-gray-100 rounded-full text-gray-600"
+                >
+                  <FiPrinter className="w-5 h-5" />
+                </motion.button>
+              )}
               <motion.button
                 whileHover={{ scale: 1.05 }}
                 whileTap={{ scale: 0.95 }}
@@ -108,7 +117,7 @@ export default function InvoicePreview({ settings, companyInfo, sale = {}, onClo
           </div>
 
           {/* Invoice Content */}
-          <div className="p-8" style={{ color: settings.primaryColor }}>
+          <div className="p-8 print:p-0" style={{ color: settings.primaryColor }}>
             {/* Company Header */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -134,7 +143,7 @@ export default function InvoicePreview({ settings, companyInfo, sale = {}, onClo
                 <p className="text-xl font-bold mb-2">INVOICE</p>
                 <p className="text-sm text-gray-600">#{actualSale.invoiceNumber}</p>
                 <p className="text-sm text-gray-600">
-                  Date: {new Date(actualSale.timestamp).toLocaleDateString()}
+                  Date: {formatDate(actualSale.timestamp)}
                 </p>
               </div>
             </motion.div>
@@ -280,6 +289,29 @@ export default function InvoicePreview({ settings, companyInfo, sale = {}, onClo
               </motion.div>
             )}
 
+            {/* QR Code Section */}
+            {settings.qrCodeEnabled && sale.qrCodeUrl && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-8 flex flex-col items-center"
+              >
+                <img
+                  src={sale.qrCodeUrl}
+                  alt="Receipt QR Code"
+                  className="w-32 h-32"
+                />
+                <p className="mt-2 text-sm text-gray-600">
+                  Scan to view digital receipt
+                </p>
+                {settings.digitalReceipts?.customerFeedbackEnabled && (
+                  <p className="text-xs text-gray-500">
+                    Rate your experience by scanning the code
+                  </p>
+                )}
+              </motion.div>
+            )}
+
             {/* Footer Message */}
             {settings.footerMessage && (
               <motion.div
@@ -288,6 +320,11 @@ export default function InvoicePreview({ settings, companyInfo, sale = {}, onClo
                 className="text-center text-sm text-gray-600 mt-8"
               >
                 {settings.footerMessage}
+                {settings.digitalReceipts?.enabled && (
+                  <p className="text-xs text-green-600 mt-2">
+                    ♻️ Thank you for choosing digital receipts
+                  </p>
+                )}
               </motion.div>
             )}
           </div>

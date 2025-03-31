@@ -13,11 +13,15 @@ import {
   FiClock,
   FiCheckCircle,
   FiXCircle,
-  FiList
+  FiList,
+  FiCamera
 } from 'react-icons/fi';
 import { useRefund } from '../../contexts/RefundContext';
 import { getProducts } from '../../utils/inventoryQueries';
 import { getOrders } from '../../utils/orderQueries';
+import { getReceiptByQRCode } from '../../utils/digitalReceiptQueries';
+import { QrReader } from 'react-qr-reader';
+import toast from 'react-hot-toast';
 
 export default function RefundRequest() {
   const { initiateRefund, loading, error, refundRequests } = useRefund();
@@ -35,6 +39,8 @@ export default function RefundRequest() {
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [showOrderSearch, setShowOrderSearch] = useState(false);
   const [showRefundHistory, setShowRefundHistory] = useState(false);
+  const [showScanner, setShowScanner] = useState(false);
+  const [scannedData, setScannedData] = useState(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -144,6 +150,32 @@ export default function RefundRequest() {
     }
   };
 
+  const handleScan = (result) => {
+    if (result) {
+      setScannedData(result?.text);
+      handleReceiptLookup(result?.text);
+    }
+  };
+
+  const handleError = (error) => {
+    console.error('QR Code scanning error:', error);
+    toast.error('Failed to scan QR code. Please try again.');
+  };
+
+  const handleReceiptLookup = async (qrData) => {
+    try {
+      const receipt = await getReceiptByQRCode(qrData);
+      if (receipt) {
+        // Process the receipt data
+        setShowScanner(false);
+        // Additional receipt handling logic here
+      }
+    } catch (error) {
+      console.error('Error looking up receipt:', error);
+      toast.error('Failed to find receipt. Please try again.');
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -156,14 +188,24 @@ export default function RefundRequest() {
             <FiFileText className="w-5 h-5 mr-2" />
             Request a Refund
           </h2>
-          <button
-            type="button"
-            onClick={() => setShowRefundHistory(!showRefundHistory)}
-            className="flex items-center text-sm text-primary-600 hover:text-primary-700"
-          >
-            <FiList className="w-4 h-4 mr-1" />
-            {showRefundHistory ? 'Hide History' : 'Show History'}
-          </button>
+          <div className="flex space-x-2">
+            <button
+              type="button"
+              onClick={() => setShowRefundHistory(!showRefundHistory)}
+              className="flex items-center text-sm text-primary-600 hover:text-primary-700"
+            >
+              <FiList className="w-4 h-4 mr-1" />
+              {showRefundHistory ? 'Hide History' : 'Show History'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowScanner(true)}
+              className="flex items-center text-sm text-primary-600 hover:text-primary-700"
+            >
+              <FiCamera className="w-4 h-4 mr-1" />
+              Scan Receipt
+            </button>
+          </div>
         </div>
 
         {showRefundHistory && refundRequests && refundRequests.length > 0 && (
@@ -218,6 +260,28 @@ export default function RefundRequest() {
           <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4 flex items-center">
             <FiAlertCircle className="w-5 h-5 text-red-400 mr-2" />
             <p className="text-red-700">{error || submitError}</p>
+          </div>
+        )}
+
+        {showScanner && (
+          <div className="mb-6">
+            <div className="relative w-full max-w-md mx-auto">
+              <QrReader
+                constraints={{ facingMode: 'environment' }}
+                onResult={handleScan}
+                className="w-full"
+                videoStyle={{ borderRadius: '0.5rem' }}
+              />
+              <button
+                onClick={() => setShowScanner(false)}
+                className="absolute top-2 right-2 p-2 bg-white rounded-full shadow-md"
+              >
+                <FiX className="w-5 h-5 text-gray-600" />
+              </button>
+            </div>
+            <p className="text-sm text-gray-500 text-center mt-2">
+              Position the QR code within the frame to scan
+            </p>
           </div>
         )}
 

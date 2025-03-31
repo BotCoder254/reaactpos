@@ -3,6 +3,7 @@ import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
+import { generateQRCode } from '../utils/qrCodeUtils';
 
 const InvoiceCustomizationContext = createContext();
 
@@ -45,11 +46,22 @@ const defaultSettings = {
   showDiscountDetails: true,
   showLoyaltyPoints: true,
   digitalSignatureEnabled: false,
-  qrCodeEnabled: false,
+  qrCodeEnabled: true,
   customFields: {
     orderNumber: true,
     customerReference: true,
     salesPerson: true
+  },
+  digitalReceipts: {
+    enabled: true,
+    defaultToPaperless: true,
+    allowCustomerRating: true,
+    sendEmailCopy: true,
+    qrCodePosition: 'bottom', // 'top', 'bottom', 'none'
+    showSocialShare: true,
+    customerFeedbackEnabled: true,
+    retentionDays: 365, // How long to keep digital receipts
+    automaticRefundLookup: true // Use QR code for refund lookups
   }
 };
 
@@ -216,12 +228,25 @@ export const InvoiceCustomizationProvider = ({ children }) => {
       const customer = sale.customer;
       const items = sale.items;
       
+      // Generate QR code if enabled
+      let qrCodeUrl = null;
+      if (settings.qrCodeEnabled) {
+        try {
+          const receiptUrl = `${window.location.origin}/receipt/${saleId}`;
+          qrCodeUrl = await generateQRCode(receiptUrl);
+        } catch (error) {
+          console.error('Error generating QR code:', error);
+          // Continue without QR code if generation fails
+        }
+      }
+      
       return {
         ...sale,
         customer,
         items,
         settings,
         companyInfo,
+        qrCodeUrl,
         timestamp: new Date().toISOString()
       };
     } catch (error) {
