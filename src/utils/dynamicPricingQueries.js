@@ -123,9 +123,16 @@ export const getActiveDynamicPricingRules = async () => {
 };
 
 export const calculateDynamicPrice = (basePrice, rules) => {
-  if (!rules || rules.length === 0) return basePrice;
+  // Handle invalid or missing basePrice
+  if (!basePrice || isNaN(basePrice)) return 0;
+  
+  // Ensure basePrice is a number
+  const numericBasePrice = Number(basePrice);
+  
+  // If no rules or empty rules array, return original price
+  if (!rules || rules.length === 0) return numericBasePrice;
 
-  let finalPrice = basePrice;
+  let finalPrice = numericBasePrice;
   let maxDiscount = 0;
 
   rules.forEach(rule => {
@@ -133,22 +140,26 @@ export const calculateDynamicPrice = (basePrice, rules) => {
 
     switch (rule.type) {
       case 'percentage':
-        discount = basePrice * (rule.value / 100);
+        discount = numericBasePrice * (Number(rule.value || 0) / 100);
         break;
       case 'fixed':
-        discount = rule.value;
+        discount = Number(rule.value || 0);
         break;
       case 'timeOfDay':
-        discount = basePrice * (rule.discount / 100);
+        discount = numericBasePrice * (Number(rule.discount || 0) / 100);
         break;
       default:
         break;
     }
 
-    // Apply the highest discount
-    maxDiscount = Math.max(maxDiscount, discount);
+    // Ensure discount is a valid number
+    if (!isNaN(discount)) {
+      maxDiscount = Math.max(maxDiscount, discount);
+    }
   });
 
-  finalPrice = basePrice - maxDiscount;
-  return Math.max(finalPrice, 0); // Ensure price doesn't go below 0
+  finalPrice = numericBasePrice - maxDiscount;
+  
+  // Ensure final price is not negative and is rounded to 2 decimal places
+  return Math.max(Math.round((finalPrice + Number.EPSILON) * 100) / 100, 0);
 }; 

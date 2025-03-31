@@ -68,9 +68,9 @@ export default function Sidebar() {
       subItems: [
         { name: 'Schedule Shifts', icon: FiCalendar, path: '/shifts/schedule' },
         { name: 'Shift Calendar', icon: CalendarIcon, path: '/shifts/calendar' },
-        { name: 'Attendance Log', icon: ClipboardDocumentListIcon, path: '/shifts/attendance' },
-        { name: 'Shift Analytics', icon: ChartBarIcon, path: '/shifts/analytics' },
-        { name: 'Break Management', icon: FiCoffee, path: '/shifts/breaks' },
+        // { name: 'Attendance Log', icon: ClipboardDocumentListIcon, path: '/shifts/attendance' },
+        // { name: 'Shift Analytics', icon: ChartBarIcon, path: '/shifts/analytics' },
+        // { name: 'Break Management', icon: FiCoffee, path: '/shifts/breaks' },
       ]
     },
     
@@ -95,15 +95,15 @@ export default function Sidebar() {
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     
     // Updated Shift Management Section for Cashiers
-    { name: 'My Shifts', icon: CalendarIcon, path: '/shifts',
-      subItems: [
-        { name: 'View Schedule', icon: FiCalendar, path: '/shifts/schedule' },
-        { name: 'Clock In/Out', icon: ClockIcon, path: '/shifts/clock' },
-        { name: 'Break Timer', icon: FiCoffee, path: '/shifts/breaks' },
-        { name: 'Attendance History', icon: ClipboardDocumentListIcon, path: '/shifts/attendance' },
-        { name: 'Notifications', icon: BellIcon, path: '/shifts/notifications' },
-      ]
-    },
+    // { name: 'My Shifts', icon: CalendarIcon, path: '/shifts',
+    //   subItems: [
+    //     { name: 'View Schedule', icon: FiCalendar, path: '/shifts/schedule' },
+    //     { name: 'Clock In/Out', icon: ClockIcon, path: '/shifts/clock' },
+    //     { name: 'Break Timer', icon: FiCoffee, path: '/shifts/breaks' },
+    //     { name: 'Attendance History', icon: ClipboardDocumentListIcon, path: '/shifts/attendance' },
+    //     { name: 'Notifications', icon: BellIcon, path: '/shifts/notifications' },
+    //   ]
+    // },
     
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Loyalty Program', icon: FiStar, path: '/loyalty' },

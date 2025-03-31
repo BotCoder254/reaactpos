@@ -90,13 +90,17 @@ export default function POS() {
         const prices = {};
         
         productsData.forEach(product => {
+          // Ensure image array exists and is valid
+          const validImages = Array.isArray(product.images) ? product.images.filter(img => img && typeof img === 'string') : [];
+          
           fetchedProducts[product.id] = {
             ...product,
-            price: Number(product.price),
-            stock: Number(product.stock),
-            inCart: false
+            price: Number(product.price) || 0,
+            stock: Number(product.stock) || 0,
+            inCart: false,
+            images: validImages
           };
-          prices[product.id] = product.price;
+          prices[product.id] = Number(product.price) || 0;
         });
 
         // Apply dynamic pricing rules
@@ -529,11 +533,16 @@ export default function POS() {
       whileTap={{ scale: !products[product.id]?.inCart ? 0.98 : 1 }}
     >
       <div className="relative">
-        {product.images && product.images.length > 0 ? (
+        {product.images && product.images.length > 0 && product.images[0] ? (
           <img
             src={product.images[0]}
             alt={product.name}
             className="w-full h-32 object-cover rounded-md mb-2"
+            onError={(e) => {
+              e.target.onerror = null;
+              e.target.src = 'placeholder-image-url'; // Replace with your placeholder image URL
+              e.target.className = "w-full h-32 object-contain rounded-md mb-2 bg-gray-100";
+            }}
           />
         ) : (
           <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded-md mb-2">
@@ -557,10 +566,10 @@ export default function POS() {
         {product.price !== originalPrices[product.id] ? (
           <div className="space-y-1">
             <span className="text-gray-500 line-through text-sm">
-              ${originalPrices[product.id]?.toFixed(2)}
+              ${(originalPrices[product.id] || 0).toFixed(2)}
             </span>
             <span className="text-primary-600 font-semibold block">
-              ${product.price.toFixed(2)}
+              ${(product.price || 0).toFixed(2)}
             </span>
             <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
               Special Price
@@ -568,12 +577,12 @@ export default function POS() {
           </div>
         ) : (
           <span className="text-gray-900 font-semibold">
-            ${product.price.toFixed(2)}
+            ${(product.price || 0).toFixed(2)}
           </span>
         )}
       </div>
       <div className="mt-1 text-sm text-gray-500">
-        Stock: {product.stock}
+        Stock: {product.stock || 0}
       </div>
     </motion.div>
   );
@@ -629,11 +638,16 @@ export default function POS() {
                       }}
                     >
                       <div className="relative">
-                        {product.images && product.images.length > 0 ? (
+                        {product.images && product.images.length > 0 && product.images[0] ? (
                           <img
                             src={product.images[0]}
                             alt={product.name}
                             className="w-full h-32 object-cover rounded-md mb-2"
+                            onError={(e) => {
+                              e.target.onerror = null;
+                              e.target.src = 'placeholder-image-url'; // Replace with your placeholder image URL
+                              e.target.className = "w-full h-32 object-contain rounded-md mb-2 bg-gray-100";
+                            }}
                           />
                         ) : (
                           <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded-md mb-2">
@@ -642,8 +656,8 @@ export default function POS() {
                         )}
                       </div>
                       <h3 className="font-medium text-gray-900">{product.name}</h3>
-                      <p className="text-sm text-gray-500">${product.price.toFixed(2)}</p>
-                      <p className="text-xs text-gray-400">Stock: {product.stock}</p>
+                      <p className="text-sm text-gray-500">${(product.price || 0).toFixed(2)}</p>
+                      <p className="text-xs text-gray-400">Stock: {product.stock || 0}</p>
                     </motion.div>
                   ))}
                 </div>
