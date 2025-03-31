@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, collection, getDocs, query, where, orderBy, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { useAuth } from './AuthContext';
 import toast from 'react-hot-toast';
@@ -13,6 +13,7 @@ export function useInvoiceCustomization() {
 const defaultSettings = {
   logo: '',
   primaryColor: '#2563eb',
+  secondaryColor: '#1e40af',
   headerMessage: 'Thank you for your business!',
   footerMessage: 'Please visit us again!',
   additionalFields: [],
@@ -34,19 +35,105 @@ const defaultSettings = {
     }
   ],
   defaultTemplate: 'default',
-  customerNoteEnabled: true
+  customerNoteEnabled: true,
+  paymentTerms: '',
+  promotionalContent: '',
+  taxSettings: {
+    showTaxDetails: true,
+    taxBreakdown: true
+  },
+  showDiscountDetails: true,
+  showLoyaltyPoints: true,
+  digitalSignatureEnabled: false,
+  qrCodeEnabled: false,
+  customFields: {
+    orderNumber: true,
+    customerReference: true,
+    salesPerson: true
+  }
 };
 
 export const InvoiceCustomizationProvider = ({ children }) => {
   const { currentUser } = useAuth();
   const [settings, setSettings] = useState(defaultSettings);
   const [loading, setLoading] = useState(true);
+  const [companyInfo, setCompanyInfo] = useState(null);
+  const [recentSales, setRecentSales] = useState([]);
+  const [salesHistory, setSalesHistory] = useState([]);
 
   useEffect(() => {
     if (currentUser) {
       loadSettings();
+      loadCompanyInfo();
+      loadRecentSales();
+      loadSalesHistory();
     }
   }, [currentUser]);
+
+  const loadCompanyInfo = async () => {
+    try {
+      const companyRef = doc(db, 'companyInfo', currentUser.uid);
+      const docSnap = await getDoc(companyRef);
+      
+      if (docSnap.exists()) {
+        setCompanyInfo(docSnap.data());
+      }
+    } catch (error) {
+      console.error('Error loading company info:', error);
+    }
+  };
+
+  const loadRecentSales = async () => {
+    try {
+      const salesRef = collection(db, 'sales');
+      const q = query(
+        salesRef,
+        orderBy('timestamp', 'desc'),
+        limit(10)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const sales = querySnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(sale => sale.status === 'completed');
+      
+      setRecentSales(sales.slice(0, 10));
+    } catch (error) {
+      console.error('Error loading recent sales:', error);
+    }
+  };
+
+  const loadSalesHistory = async () => {
+    try {
+      const salesRef = collection(db, 'sales');
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+      const q = query(
+        salesRef,
+        orderBy('timestamp', 'desc'),
+        limit(500)
+      );
+      
+      const querySnapshot = await getDocs(q);
+      const sales = querySnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        }))
+        .filter(sale => 
+          sale.status === 'completed' && 
+          sale.timestamp?.toDate() >= thirtyDaysAgo
+        );
+      
+      setSalesHistory(sales);
+    } catch (error) {
+      console.error('Error loading sales history:', error);
+    }
+  };
 
   const loadSettings = async () => {
     try {
@@ -54,9 +141,9 @@ export const InvoiceCustomizationProvider = ({ children }) => {
       const docSnap = await getDoc(docRef);
       
       if (docSnap.exists()) {
-        setSettings(docSnap.data());
+        const data = docSnap.data();
+        setSettings({ ...defaultSettings, ...data });
       } else {
-        // Initialize with default settings if none exist
         await setDoc(docRef, {
           ...defaultSettings,
           createdAt: serverTimestamp(),
@@ -116,12 +203,44 @@ export const InvoiceCustomizationProvider = ({ children }) => {
     }
   };
 
+  const generateInvoice = async (saleId) => {
+    try {
+      const saleRef = doc(db, 'sales', saleId);
+      const saleDoc = await getDoc(saleRef);
+      
+      if (!saleDoc.exists()) {
+        throw new Error('Sale not found');
+      }
+
+      const sale = saleDoc.data();
+      const customer = sale.customer;
+      const items = sale.items;
+      
+      return {
+        ...sale,
+        customer,
+        items,
+        settings,
+        companyInfo,
+        timestamp: new Date().toISOString()
+      };
+    } catch (error) {
+      console.error('Error generating invoice:', error);
+      throw error;
+    }
+  };
+
   const value = {
     settings,
     loading,
+    companyInfo,
+    recentSales,
+    salesHistory,
     updateSettings,
     addTemplate,
-    removeTemplate
+    removeTemplate,
+    generateInvoice,
+    refreshSales: loadRecentSales
   };
 
   return (

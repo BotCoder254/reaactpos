@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
+import { collection, getDocs, query, orderBy, where, limit } from 'firebase/firestore';
 import { db } from '../firebase';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -8,10 +8,15 @@ import {
   FiFilter,
   FiPrinter,
   FiMail,
+  FiFileText,
+  FiEye
 } from 'react-icons/fi';
 import { useAuth } from '../contexts/AuthContext';
+import { useInvoiceCustomization } from '../contexts/InvoiceCustomizationContext';
 import { exportSales, emailReceipt } from '../utils/salesQueries';
 import { getReceiptBranding, generateReceiptHTML } from '../utils/receiptQueries';
+import InvoicePreview from '../components/invoices/InvoicePreview';
+import { format } from 'date-fns';
 
 export default function Sales() {
   const [sales, setSales] = useState([]);
@@ -20,21 +25,34 @@ export default function Sales() {
   const [filterCashier, setFilterCashier] = useState('all');
   const [filterPayment, setFilterPayment] = useState('all');
   const [receiptBranding, setReceiptBranding] = useState(null);
+  const [selectedSale, setSelectedSale] = useState(null);
+  const [showInvoice, setShowInvoice] = useState(false);
   const { userRole } = useAuth();
+  const { settings, companyInfo } = useInvoiceCustomization();
+  const [currentSettings, setCurrentSettings] = useState(null);
+  const [currentCompanyInfo, setCurrentCompanyInfo] = useState(null);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Fetch sales
+        // Fetch sales with a simple orderBy query
         const salesCollection = collection(db, 'sales');
-        const salesQuery = query(salesCollection, orderBy('timestamp', 'desc'));
+        const salesQuery = query(
+          salesCollection,
+          orderBy('timestamp', 'desc'),
+          limit(100) // Limit to last 100 sales for better performance
+        );
+        
         const salesSnapshot = await getDocs(salesQuery);
-        const salesList = salesSnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          timestamp: doc.data().timestamp?.toDate().toLocaleString() || 'N/A'
-        }));
+        const salesList = salesSnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            timestamp: doc.data().timestamp?.toDate().toLocaleString() || 'N/A'
+          }))
+          .filter(sale => sale.status === 'completed'); // Filter completed sales in memory
+
         setSales(salesList);
 
         // Fetch receipt branding
@@ -49,6 +67,38 @@ export default function Sales() {
 
     fetchData();
   }, []);
+
+  // Load latest settings and company info from localStorage
+  useEffect(() => {
+    const savedSettings = localStorage.getItem('invoiceSettings');
+    const savedCompanyInfo = localStorage.getItem('companyData');
+    
+    if (savedSettings) {
+      setCurrentSettings(JSON.parse(savedSettings));
+    } else {
+      setCurrentSettings(settings);
+    }
+    
+    if (savedCompanyInfo) {
+      setCurrentCompanyInfo(JSON.parse(savedCompanyInfo));
+    } else {
+      setCurrentCompanyInfo(companyInfo);
+    }
+  }, [settings, companyInfo]);
+
+  // Update current settings when they change
+  useEffect(() => {
+    if (settings) {
+      setCurrentSettings(settings);
+    }
+  }, [settings]);
+
+  // Update current company info when it changes
+  useEffect(() => {
+    if (companyInfo) {
+      setCurrentCompanyInfo(companyInfo);
+    }
+  }, [companyInfo]);
 
   const handleExport = async () => {
     try {
@@ -97,6 +147,28 @@ export default function Sales() {
     } catch (error) {
       console.error('Error sending receipt:', error);
       alert('Failed to send receipt');
+    }
+  };
+
+  const handleViewInvoice = (sale) => {
+    setSelectedSale(sale);
+    setShowInvoice(true);
+  };
+
+  const handlePrintInvoice = () => {
+    window.print();
+  };
+
+  const handleDownloadInvoice = () => {
+    // Implementation for downloading invoice as PDF
+    console.log('Download invoice');
+  };
+
+  const handleEmailInvoice = () => {
+    const email = prompt('Enter email address:');
+    if (email) {
+      // Implementation for emailing invoice
+      console.log('Email invoice to:', email);
     }
   };
 
@@ -225,8 +297,16 @@ export default function Sales() {
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   <div className="flex justify-end space-x-2">
                     <button
+                      onClick={() => handleViewInvoice(sale)}
+                      className="text-gray-600 hover:text-primary-600"
+                      title="View Invoice"
+                    >
+                      <FiEye className="w-5 h-5" />
+                    </button>
+                    <button
                       onClick={() => handlePrintReceipt(sale)}
                       className="text-gray-600 hover:text-primary-600"
+                      title="Print Receipt"
                     >
                       <FiPrinter className="w-5 h-5" />
                     </button>
@@ -236,8 +316,16 @@ export default function Sales() {
                         if (email) handleEmailReceipt(sale, email);
                       }}
                       className="text-gray-600 hover:text-primary-600"
+                      title="Email Receipt"
                     >
                       <FiMail className="w-5 h-5" />
+                    </button>
+                    <button
+                      onClick={() => handleViewInvoice(sale)}
+                      className="text-gray-600 hover:text-primary-600"
+                      title="View/Print Invoice"
+                    >
+                      <FiFileText className="w-5 h-5" />
                     </button>
                   </div>
                 </td>
@@ -246,6 +334,31 @@ export default function Sales() {
           </tbody>
         </table>
       </div>
+
+      {/* Invoice Preview Modal */}
+      {showInvoice && selectedSale && (
+        <InvoicePreview
+          settings={currentSettings}
+          companyInfo={currentCompanyInfo}
+          sale={{
+            ...selectedSale,
+            timestamp: selectedSale.timestamp?.toDate?.() || new Date(selectedSale.timestamp),
+            invoiceNumber: selectedSale.invoiceNumber || `INV-${format(new Date(), 'yyyyMMdd-HHmmss')}`,
+            customer: {
+              name: selectedSale.customer?.name || selectedSale.customerName || 'Walk-in Customer',
+              email: selectedSale.customer?.email || selectedSale.email || '',
+              address: selectedSale.customer?.address || selectedSale.address || ''
+            }
+          }}
+          onClose={() => setShowInvoice(false)}
+          onPrint={() => window.print()}
+          onDownload={() => console.log('Download')}
+          onEmail={() => {
+            const email = prompt('Enter email address:');
+            if (email) console.log('Email to:', email);
+          }}
+        />
+      )}
     </div>
   );
 } 
