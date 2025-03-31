@@ -93,6 +93,7 @@ export default function Sidebar() {
     { name: 'Orders', icon: ClipboardDocumentListIcon, path: '/orders' },
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
+    { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
     
     // Updated Shift Management Section for Cashiers
     // { name: 'My Shifts', icon: CalendarIcon, path: '/shifts',

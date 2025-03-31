@@ -141,7 +141,9 @@ export default function MarketingManager() {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <h2 className="text-2xl font-bold text-gray-900">Marketing Materials</h2>
+        <h2 className="text-2xl font-bold text-gray-900">
+          {userRole === 'manager' ? 'Marketing Materials' : 'Active Promotions'}
+        </h2>
         {userRole === 'manager' && (
           <motion.button
             whileHover={{ scale: 1.05 }}
@@ -173,7 +175,7 @@ export default function MarketingManager() {
         </div>
       )}
 
-      {/* Add new banner form */}
+      {/* Add new banner form - Only for managers */}
       {isAdding && userRole === 'manager' && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -325,6 +327,9 @@ export default function MarketingManager() {
                   <p className="text-sm text-gray-500">
                     {new Date(banner.startDate).toLocaleDateString()} - {new Date(banner.endDate).toLocaleDateString()}
                   </p>
+                  {banner.description && (
+                    <p className="text-sm text-gray-600 mt-1">{banner.description}</p>
+                  )}
                 </div>
               </div>
               {userRole === 'manager' && (

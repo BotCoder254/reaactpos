@@ -97,7 +97,7 @@ function AppContent() {
               } />
               <Route path="/marketing" element={
                 <PrivateRoute>
-                  {userRole === 'manager' ? <Marketing /> : <Navigate to="/" replace />}
+                  <Marketing />
                 </PrivateRoute>
               } />
               <Route path="/expenses" element={
