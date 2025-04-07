@@ -26,7 +26,7 @@ import {
   BellIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
-import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus, FiClock, FiCalendar, FiCoffee, FiFileText } from 'react-icons/fi';
+import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus, FiClock, FiCalendar, FiCoffee, FiFileText, FiHelpCircle } from 'react-icons/fi';
 import { useRole } from '../../contexts/RoleContext';
 import { classNames } from '../../utils/classNames';
 import { NavLink } from 'react-router-dom';
@@ -53,6 +53,8 @@ export default function Sidebar() {
     { name: 'Sales Goals', icon: ChartBarIcon, path: '/sales-goals' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
+    { name: 'Self-Checkout Monitor', icon: ChartBarIcon, path: '/monitor' },
+    
     
     // Staff & Shift Management Section
     { name: 'Staff Management', icon: UsersIcon, path: '/staff', 
@@ -99,7 +101,7 @@ export default function Sidebar() {
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
-    
+
     // Shift Management Section for Cashiers
     // { name: 'My Shifts', icon: CalendarIcon, path: '/shifts',
     //   subItems: [
@@ -115,6 +117,9 @@ export default function Sidebar() {
     { name: 'Loyalty Program', icon: FiStar, path: '/loyalty' },
     { name: 'Settings', icon: CogIcon, path: '/settings' },
     { name: 'Refund Request', icon: FiRefreshCcw, path: '/refunds' },
+    // { name: 'Self-Checkout Monitor', icon: ChartBarIcon, path: '/monitor' },
+    { name: 'Remote Assistance', icon: FiHelpCircle, path: '/remote-assistance' },
+
     {
       name: 'Invoice Options',
       title: 'Invoice Options',

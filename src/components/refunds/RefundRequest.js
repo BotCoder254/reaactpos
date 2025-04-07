@@ -21,10 +21,12 @@ import { getProducts } from '../../utils/inventoryQueries';
 import { getOrders } from '../../utils/orderQueries';
 import { getReceiptByQRCode } from '../../utils/digitalReceiptQueries';
 import { QrReader } from 'react-qr-reader';
+import { db } from '../../firebase';
+import { collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import toast from 'react-hot-toast';
 
 export default function RefundRequest() {
-  const { initiateRefund, loading, error, refundRequests } = useRefund();
+  const { initiateRefund, loading } = useRefund();
   const [orderId, setOrderId] = useState('');
   const [amount, setAmount] = useState('');
   const [reason, setReason] = useState('');
@@ -41,6 +43,37 @@ export default function RefundRequest() {
   const [showRefundHistory, setShowRefundHistory] = useState(false);
   const [showScanner, setShowScanner] = useState(false);
   const [scannedData, setScannedData] = useState(null);
+  const [refundRequests, setRefundRequests] = useState([]);
+  const [loadingRefunds, setLoadingRefunds] = useState(true);
+
+  useEffect(() => {
+    const loadRefundRequests = async () => {
+      try {
+        setLoadingRefunds(true);
+        const refundsRef = collection(db, 'refunds');
+        const refundsSnapshot = await getDocs(refundsRef);
+        
+        const loadedRefunds = refundsSnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().timestamp?.toDate() || new Date()
+          }))
+          .sort((a, b) => b.createdAt - a.createdAt);
+
+        setRefundRequests(loadedRefunds);
+        setLoadingRefunds(false);
+      } catch (error) {
+        console.error('Error loading refund requests:', error);
+        toast.error('Failed to load refund history');
+        setLoadingRefunds(false);
+      }
+    };
+
+    if (showRefundHistory) {
+      loadRefundRequests();
+    }
+  }, [showRefundHistory]);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -49,16 +82,22 @@ export default function RefundRequest() {
         setProducts(fetchedProducts);
       } catch (err) {
         console.error('Error fetching products:', err);
+        toast.error('Failed to load products');
       }
     };
+
     const fetchOrders = async () => {
       try {
         const fetchedOrders = await getOrders();
-        setOrders(fetchedOrders);
+        // Sort orders by date on the client side
+        const sortedOrders = fetchedOrders.sort((a, b) => b.createdAt - a.createdAt);
+        setOrders(sortedOrders);
       } catch (err) {
         console.error('Error fetching orders:', err);
+        toast.error('Failed to load orders');
       }
     };
+
     fetchProducts();
     fetchOrders();
   }, []);
@@ -110,31 +149,31 @@ export default function RefundRequest() {
     }
 
     try {
-      // Clean and validate data before submission
       const refundData = {
         orderId: orderId.trim(),
         amount: parseFloat(amount) || 0,
         reason: reason.trim(),
         productId: selectedProduct?.id || '',
         productName: selectedProduct?.name || '',
-        productSKU: selectedProduct?.sku || '',  // Add fallback for undefined SKU
+        productSKU: selectedProduct?.sku || '',
         timestamp: new Date(),
-        status: 'pending'
+        status: 'pending',
+        createdAt: new Date()
       };
 
-      // Only add receipt if it exists
       if (receipt) {
         refundData.receipt = receipt;
       }
 
-      // Additional validation
       if (refundData.amount <= 0) {
         setSubmitError('Refund amount must be greater than 0');
         return;
       }
 
-      await initiateRefund(refundData);
-      
+      // Add the refund request directly to Firestore
+      const refundRef = collection(db, 'refunds');
+      await addDoc(refundRef, refundData);
+
       // Reset form
       setOrderId('');
       setAmount('');
@@ -144,6 +183,21 @@ export default function RefundRequest() {
       setSelectedProduct(null);
       setSearchTerm('');
       setOrderSearchTerm('');
+
+      toast.success('Refund request submitted successfully');
+
+      // Reload refund requests if history is shown
+      if (showRefundHistory) {
+        const refundsSnapshot = await getDocs(collection(db, 'refunds'));
+        const updatedRefunds = refundsSnapshot.docs
+          .map(doc => ({
+            id: doc.id,
+            ...doc.data(),
+            createdAt: doc.data().timestamp?.toDate() || new Date()
+          }))
+          .sort((a, b) => b.createdAt - a.createdAt);
+        setRefundRequests(updatedRefunds);
+      }
     } catch (err) {
       console.error('Refund submission error:', err);
       setSubmitError(err.message || 'Failed to create refund request. Please try again.');
@@ -212,54 +266,61 @@ export default function RefundRequest() {
           <div className="mb-6 bg-gray-50 rounded-lg p-4">
             <h3 className="text-sm font-medium text-gray-700 mb-3">Your Refund Requests</h3>
             <div className="space-y-3">
-              {refundRequests.map((request) => (
-                <div key={request.id} className="bg-white p-3 rounded-md shadow-sm border border-gray-200">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <p className="text-sm font-medium text-gray-900">
-                        Order: {request.orderId}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Product: {request.productName}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        Amount: ${request.amount.toFixed(2)}
-                      </p>
-                    </div>
-                    <div className="flex items-center">
-                      {request.status === 'pending' && (
-                        <span className="flex items-center text-yellow-600 text-sm">
-                          <FiClock className="w-4 h-4 mr-1" />
-                          Pending
-                        </span>
-                      )}
-                      {request.status === 'approved' && (
-                        <span className="flex items-center text-green-600 text-sm">
-                          <FiCheckCircle className="w-4 h-4 mr-1" />
-                          Approved
-                        </span>
-                      )}
-                      {request.status === 'rejected' && (
-                        <span className="flex items-center text-red-600 text-sm">
-                          <FiXCircle className="w-4 h-4 mr-1" />
-                          Rejected
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Submitted: {new Date(request.createdAt).toLocaleString()}
-                  </p>
+              {loadingRefunds ? (
+                <div className="text-center py-4">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-500 mx-auto"></div>
+                  <p className="mt-2 text-sm text-gray-500">Loading refund history...</p>
                 </div>
-              ))}
+              ) : (
+                refundRequests.map((request) => (
+                  <div key={request.id} className="bg-white p-3 rounded-md shadow-sm border border-gray-200">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          Order: {request.orderId}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Product: {request.productName}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          Amount: ${request.amount.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        {request.status === 'pending' && (
+                          <span className="flex items-center text-yellow-600 text-sm">
+                            <FiClock className="w-4 h-4 mr-1" />
+                            Pending
+                          </span>
+                        )}
+                        {request.status === 'approved' && (
+                          <span className="flex items-center text-green-600 text-sm">
+                            <FiCheckCircle className="w-4 h-4 mr-1" />
+                            Approved
+                          </span>
+                        )}
+                        {request.status === 'rejected' && (
+                          <span className="flex items-center text-red-600 text-sm">
+                            <FiXCircle className="w-4 h-4 mr-1" />
+                            Rejected
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Submitted: {new Date(request.createdAt).toLocaleString()}
+                    </p>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
 
-        {(error || submitError) && (
+        {submitError && (
           <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4 flex items-center">
             <FiAlertCircle className="w-5 h-5 text-red-400 mr-2" />
-            <p className="text-red-700">{error || submitError}</p>
+            <p className="text-red-700">{submitError}</p>
           </div>
         )}
 
