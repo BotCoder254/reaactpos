@@ -51,6 +51,7 @@ import InvoicePreview from './components/invoices/InvoicePreview';
 import SelfCheckoutMode from './components/checkout/SelfCheckoutMode';
 import SelfCheckoutMonitor from './components/checkout/SelfCheckoutMonitor';
 import RemoteAssistance from './components/checkout/RemoteAssistance';
+import InvestigateAlert from './components/checkout/InvestigateAlert';
 
 // Import Shift Management Components
 import ShiftCalendar from './components/shifts/ShiftCalendar';
@@ -232,6 +233,11 @@ function AppContent() {
               <Route path="/monitor" element={
                 <PrivateRoute>
                   {handleRoleAccess(SelfCheckoutMonitor, 'manager')}
+                </PrivateRoute>
+              } />
+              <Route path="/investigate/:alertId" element={
+                <PrivateRoute>
+                  {handleRoleAccess(InvestigateAlert, 'manager')}
                 </PrivateRoute>
               } />
               <Route path="/remote-assistance" element={

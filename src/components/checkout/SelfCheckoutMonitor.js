@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import { FiAlertTriangle, FiClock, FiDollarSign, FiUsers, FiActivity, FiUser, FiPhone, FiMail } from 'react-icons/fi';
 import { db } from '../../firebase';
 import { collection, query, getDocs, onSnapshot, orderBy } from 'firebase/firestore';
@@ -35,6 +36,8 @@ export default function SelfCheckoutMonitor() {
   const [transactionData, setTransactionData] = useState([]);
   const [stationPerformance, setStationPerformance] = useState([]);
   const [fraudDistribution, setFraudDistribution] = useState([]);
+
+  const navigate = useNavigate();
 
   useEffect(() => {
     // Listen for all stations without complex queries
@@ -160,6 +163,10 @@ export default function SelfCheckoutMonitor() {
       return { color: 'text-green-500', text: 'In Use' };
     }
     return { color: 'text-gray-500', text: 'Available' };
+  };
+
+  const handleInvestigate = (alertId) => {
+    navigate(`/investigate/${alertId}`);
   };
 
   return (
@@ -380,9 +387,14 @@ export default function SelfCheckoutMonitor() {
                   </p>
                 </div>
               </div>
-              <button className="text-sm text-primary-600 hover:text-primary-700">
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={() => handleInvestigate(alert.id)}
+                className="text-sm text-primary-600 hover:text-primary-700"
+              >
                 Investigate
-              </button>
+              </motion.button>
             </div>
           ))}
           {alerts.length === 0 && (
