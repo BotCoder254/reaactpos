@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { FiAlertTriangle, FiClock, FiDollarSign, FiUsers, FiActivity } from 'react-icons/fi';
+import { FiAlertTriangle, FiClock, FiDollarSign, FiUsers, FiActivity, FiUser, FiPhone, FiMail } from 'react-icons/fi';
 import { db } from '../../firebase';
-import { collection, query, getDocs, onSnapshot } from 'firebase/firestore';
+import { collection, query, getDocs, onSnapshot, orderBy } from 'firebase/firestore';
 import {
   LineChart,
   Line,
@@ -23,6 +23,7 @@ const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
 export default function SelfCheckoutMonitor() {
   const [stations, setStations] = useState([]);
   const [alerts, setAlerts] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [stats, setStats] = useState({
     averageTransactionTime: 0,
     totalTransactions: 0,
@@ -48,17 +49,45 @@ export default function SelfCheckoutMonitor() {
       setStations(stationData);
     });
 
+    // Listen for all transactions
+    const transactionsRef = collection(db, 'self-checkout-logs');
+    const transactionsQuery = query(transactionsRef, orderBy('timestamp', 'desc'));
+    const unsubscribeTransactions = onSnapshot(transactionsQuery, (snapshot) => {
+      const transactionData = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          timestamp: doc.data().timestamp?.toDate() || new Date()
+        }))
+        .filter(log => log.action === 'complete_transaction');
+      setTransactions(transactionData);
+
+      // Update stats
+      const totalTransactions = transactionData.length;
+      const totalTime = transactionData.reduce((sum, t) => {
+        return sum + (t.duration || 0);
+      }, 0);
+      const avgTime = totalTransactions > 0 ? totalTime / totalTransactions : 0;
+
+      setStats(prev => ({
+        ...prev,
+        totalTransactions,
+        averageTransactionTime: Math.round(avgTime)
+      }));
+    });
+
     // Listen for all alerts without complex queries
     const logsRef = collection(db, 'self-checkout-logs');
     const unsubscribeAlerts = onSnapshot(logsRef, (snapshot) => {
       const allLogs = snapshot.docs.map(doc => ({
         id: doc.id,
-        ...doc.data()
+        ...doc.data(),
+        timestamp: doc.data().timestamp?.toDate() || new Date()
       }));
       
       // Filter alerts in memory
       const alertData = allLogs.filter(log => log.type === 'alert')
-        .sort((a, b) => b.timestamp?.toDate() - a.timestamp?.toDate())
+        .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, 10); // Get only last 10 alerts
       
       setAlerts(alertData);
@@ -79,6 +108,7 @@ export default function SelfCheckoutMonitor() {
     return () => {
       unsubscribeStations();
       unsubscribeAlerts();
+      unsubscribeTransactions();
     };
   }, []);
 
@@ -88,7 +118,7 @@ export default function SelfCheckoutMonitor() {
     return hours.map(hour => ({
       hour: hour.toString().padStart(2, '0') + ':00',
       transactions: logs.filter(log => 
-        log.timestamp?.toDate().getHours() === hour &&
+        log.timestamp?.getHours() === hour &&
         log.action === 'complete_transaction'
       ).length
     }));
@@ -171,6 +201,98 @@ export default function SelfCheckoutMonitor() {
         </div>
       </div>
 
+      {/* Active Stations */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Stations</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {stations.map((station) => {
+            const status = getStationStatus(station);
+            return (
+              <motion.div
+                key={station.id}
+                whileHover={{ scale: 1.02 }}
+                className="border rounded-lg p-4"
+              >
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-medium text-gray-900">Station {station.id}</h3>
+                    <p className={`text-sm ${status.color}`}>{status.text}</p>
+                    {station.currentCustomer && (
+                      <div className="mt-2 space-y-1">
+                        <p className="text-sm text-gray-600 flex items-center">
+                          <FiUser className="w-4 h-4 mr-1" />
+                          {station.currentCustomer.name}
+                        </p>
+                        <p className="text-sm text-gray-600 flex items-center">
+                          <FiPhone className="w-4 h-4 mr-1" />
+                          {station.currentCustomer.phone}
+                        </p>
+                        <p className="text-sm text-gray-600 flex items-center">
+                          <FiMail className="w-4 h-4 mr-1" />
+                          {station.currentCustomer.email}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  {station.currentTransaction && (
+                    <div className="text-right">
+                      <p className="text-sm text-gray-500">Current Total</p>
+                      <p className="font-medium text-gray-900">
+                        ${(station.currentTransaction?.total || 0).toFixed(2)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </motion.div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Recent Transactions */}
+      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
+        <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Transactions</h2>
+        <div className="space-y-4">
+          {transactions.map((transaction) => (
+            <div key={transaction.id} className="border rounded-lg p-4">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="font-medium text-gray-900">Station {transaction.stationId}</h3>
+                  <p className="text-sm text-gray-500">
+                    {transaction.timestamp.toLocaleString()}
+                  </p>
+                  {transaction.customerDetails && (
+                    <div className="mt-2 space-y-1">
+                      <p className="text-sm text-gray-600 flex items-center">
+                        <FiUser className="w-4 h-4 mr-1" />
+                        {transaction.customerDetails.name}
+                      </p>
+                      <p className="text-sm text-gray-600 flex items-center">
+                        <FiPhone className="w-4 h-4 mr-1" />
+                        {transaction.customerDetails.phone}
+                      </p>
+                      <p className="text-sm text-gray-600 flex items-center">
+                        <FiMail className="w-4 h-4 mr-1" />
+                        {transaction.customerDetails.email}
+                      </p>
+                    </div>
+                  )}
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-gray-500">Total</p>
+                  <p className="font-medium text-gray-900">
+                    ${(transaction.total || 0).toFixed(2)}
+                  </p>
+                </div>
+              </div>
+            </div>
+          ))}
+          {transactions.length === 0 && (
+            <p className="text-center text-gray-500 py-4">No recent transactions</p>
+          )}
+        </div>
+      </div>
+
       {/* Visualizations */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* Hourly Transaction Chart */}
@@ -243,38 +365,6 @@ export default function SelfCheckoutMonitor() {
         </div>
       </div>
 
-      {/* Active Stations */}
-      <div className="bg-white rounded-lg shadow-md p-6 mb-8">
-        <h2 className="text-lg font-semibold text-gray-900 mb-4">Active Stations</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {stations.map((station) => {
-            const status = getStationStatus(station);
-            return (
-              <motion.div
-                key={station.id}
-                whileHover={{ scale: 1.02 }}
-                className="border rounded-lg p-4"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-medium text-gray-900">Station {station.id}</h3>
-                    <p className={`text-sm ${status.color}`}>{status.text}</p>
-                  </div>
-                  {station.currentTransaction && (
-                    <div className="text-right">
-                      <p className="text-sm text-gray-500">Current Total</p>
-                      <p className="font-medium text-gray-900">
-                        ${(station.currentTransaction?.total || 0).toFixed(2)}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </motion.div>
-            );
-          })}
-        </div>
-      </div>
-
       {/* Recent Alerts */}
       <div className="bg-white rounded-lg shadow-md p-6">
         <h2 className="text-lg font-semibold text-gray-900 mb-4">Recent Alerts</h2>
@@ -286,7 +376,7 @@ export default function SelfCheckoutMonitor() {
                 <div>
                   <p className="text-sm font-medium text-gray-900">{alert.message}</p>
                   <p className="text-xs text-gray-500">
-                    Station {alert.stationId} • {new Date(alert.timestamp?.toDate()).toLocaleString()}
+                    Station {alert.stationId} • {alert.timestamp.toLocaleString()}
                   </p>
                 </div>
               </div>
