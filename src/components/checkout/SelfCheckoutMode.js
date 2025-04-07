@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiShoppingCart, FiAlertCircle, FiHelpCircle, FiUser, FiUserCheck, FiImage, FiCreditCard, FiUserPlus, FiPhone, FiMail, FiTrash2 } from 'react-icons/fi';
+import { FiShoppingCart, FiAlertCircle, FiHelpCircle, FiUser, FiUserCheck, FiImage, FiCreditCard, FiUserPlus, FiPhone, FiMail, FiTrash2, FiTag, FiStar } from 'react-icons/fi';
 import { useNavigate, useParams } from 'react-router-dom';
 import CheckoutSummary from './CheckoutSummary';
 import { db } from '../../firebase';
 import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
+import { getActiveDiscounts, calculateDiscount } from '../../utils/discountQueries';
+import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../../utils/dynamicPricingQueries';
 
 export default function SelfCheckoutMode() {
   const [cart, setCart] = useState([]);
@@ -25,6 +27,10 @@ export default function SelfCheckoutMode() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredProducts, setFilteredProducts] = useState([]);
+  const [activeDiscounts, setActiveDiscounts] = useState([]);
+  const [selectedDiscount, setSelectedDiscount] = useState(null);
+  const [dynamicPricingRules, setDynamicPricingRules] = useState([]);
+  const [originalPrices, setOriginalPrices] = useState({});
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -47,18 +53,28 @@ export default function SelfCheckoutMode() {
             imageUrl = data.imageUrl;
           }
           
+          const basePrice = Number(data.price) || 0;
+          const dynamicPrice = calculateDynamicPrice(basePrice, dynamicPricingRules);
+          
           return {
             id: doc.id,
             ...data,
-            price: Number(data.price) || 0,
+            price: dynamicPrice,
+            originalPrice: basePrice,
             stock: Number(data.stock) || 0,
             image: imageUrl || 'https://via.placeholder.com/150?text=No+Image',
             category: data.category || 'Uncategorized'
           };
         });
         
+        const prices = {};
+        loadedProducts.forEach(product => {
+          prices[product.id] = product.originalPrice;
+        });
+        
         setProducts(loadedProducts);
         setFilteredProducts(loadedProducts);
+        setOriginalPrices(prices);
       } catch (error) {
         console.error('Error loading products:', error);
         toast.error('Failed to load products. Please try again.');
@@ -87,6 +103,41 @@ export default function SelfCheckoutMode() {
     const newSubtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     setSubtotal(newSubtotal);
   }, [cart]);
+
+  useEffect(() => {
+    const fetchDiscounts = async () => {
+      try {
+        const discounts = await getActiveDiscounts();
+        setActiveDiscounts(discounts);
+      } catch (error) {
+        console.error('Error fetching discounts:', error);
+      }
+    };
+
+    fetchDiscounts();
+  }, []);
+
+  useEffect(() => {
+    const fetchDynamicPricingRules = async () => {
+      try {
+        const rules = await getActiveDynamicPricingRules();
+        setDynamicPricingRules(rules);
+      } catch (error) {
+        console.error('Error fetching dynamic pricing rules:', error);
+      }
+    };
+
+    fetchDynamicPricingRules();
+  }, []);
+
+  useEffect(() => {
+    if (selectedDiscount) {
+      const amount = calculateDiscount(subtotal, selectedDiscount);
+      setDiscountAmount(amount);
+    } else {
+      setDiscountAmount(0);
+    }
+  }, [selectedDiscount, subtotal]);
 
   const handleAddItem = async (item) => {
     if (!customerDetails) {
@@ -224,28 +275,55 @@ export default function SelfCheckoutMode() {
     }
   };
 
+  const calculateTotal = () => {
+    const subtotalAmount = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    const discountValue = selectedDiscount ? calculateDiscount(subtotalAmount, selectedDiscount) : 0;
+    const totalAfterDiscount = subtotalAmount - discountValue;
+    const tax = totalAfterDiscount * 0.1; // 10% tax rate
+    
+    return {
+      subtotal: subtotalAmount,
+      discount: discountValue,
+      tax,
+      total: totalAfterDiscount + tax
+    };
+  };
+
   const handlePayment = async (method) => {
     try {
       setProcessing(true);
       setSelectedPaymentMethod(method);
 
-      // Log the transaction
+      const totals = calculateTotal();
+
+      // Log the transaction with discount details
       await addDoc(collection(db, 'self-checkout-logs'), {
         action: 'payment_initiated',
         stationId: currentStationId,
         timestamp: serverTimestamp(),
         paymentMethod: method,
-        total: subtotal - discountAmount,
-        items: cart
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        discountDetails: selectedDiscount ? {
+          id: selectedDiscount.id,
+          name: selectedDiscount.name,
+          type: selectedDiscount.type,
+          value: selectedDiscount.value
+        } : null,
+        tax: totals.tax,
+        total: totals.total,
+        items: cart,
+        customerDetails
       });
 
       // Simulate payment processing
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // Clear cart after successful payment
+      // Clear cart and reset state after successful payment
       setCart([]);
       setSubtotal(0);
       setDiscountAmount(0);
+      setSelectedDiscount(null);
 
       toast.success('Payment successful! Thank you for shopping.');
     } catch (error) {
@@ -253,6 +331,14 @@ export default function SelfCheckoutMode() {
       toast.error('Payment failed. Please try again or seek assistance.');
     } finally {
       setProcessing(false);
+    }
+  };
+
+  const handleDiscountSelect = (discount) => {
+    if (selectedDiscount?.id === discount.id) {
+      setSelectedDiscount(null);
+    } else {
+      setSelectedDiscount(discount);
     }
   };
 
@@ -379,6 +465,87 @@ export default function SelfCheckoutMode() {
     );
   };
 
+  const renderProduct = (product) => (
+    <motion.div
+      key={product.id}
+      whileHover={{ scale: 1.02 }}
+      className="border rounded-lg p-4 cursor-pointer"
+      onClick={() => handleAddItem(product)}
+    >
+      <div className="relative w-full h-32 mb-2">
+        <img 
+          src={product.image} 
+          alt={product.name}
+          className="w-full h-full object-cover rounded"
+          onError={(e) => {
+            e.target.onerror = null;
+            e.target.src = 'https://via.placeholder.com/150?text=No+Image';
+          }}
+        />
+      </div>
+      <h3 className="font-medium text-gray-900">{product.name}</h3>
+      <div className="mt-1">
+        {product.price !== originalPrices[product.id] ? (
+          <div className="space-y-1">
+            <span className="text-gray-500 line-through text-sm">
+              ${(originalPrices[product.id] || 0).toFixed(2)}
+            </span>
+            <span className="text-primary-600 font-semibold block">
+              ${(product.price || 0).toFixed(2)}
+            </span>
+            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+              Special Price
+            </span>
+          </div>
+        ) : (
+          <span className="text-gray-900 font-semibold">
+            ${(product.price || 0).toFixed(2)}
+          </span>
+        )}
+      </div>
+    </motion.div>
+  );
+
+  const renderDiscountSection = () => (
+    <div className="mt-4">
+      <h3 className="text-sm font-medium text-gray-700 mb-2">Available Discounts</h3>
+      <div className="space-y-2">
+        {activeDiscounts.map((discount) => (
+          <button
+            key={discount.id}
+            onClick={() => handleDiscountSelect(discount)}
+            className={`w-full flex items-center justify-between p-2 rounded-md text-left ${
+              selectedDiscount?.id === discount.id
+                ? 'bg-primary-50 border-primary-200'
+                : 'bg-gray-50 border-gray-200'
+            } border hover:bg-gray-100`}
+          >
+            <div className="flex items-center">
+              <FiTag className="h-5 w-5 text-primary-500 mr-2" />
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  {discount.name}
+                </p>
+                <p className="text-xs text-gray-500">
+                  {discount.type === 'percentage'
+                    ? `${discount.value}% off`
+                    : 'Buy One Get One Free'}
+                  {discount.minPurchase > 0 &&
+                    ` (Min. $${discount.minPurchase})`}
+                </p>
+              </div>
+            </div>
+            {selectedDiscount?.id === discount.id && (
+              <span className="text-xs font-medium text-primary-600">
+                Applied
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       <AnimatePresence>
@@ -477,28 +644,7 @@ export default function SelfCheckoutMode() {
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {filteredProducts.map((product) => (
-                      <motion.div
-                        key={product.id}
-                        whileHover={{ scale: 1.02 }}
-                        className="border rounded-lg p-4 cursor-pointer"
-                        onClick={() => handleAddItem(product)}
-                      >
-                        <div className="relative w-full h-32 mb-2">
-                          <img 
-                            src={product.image} 
-                            alt={product.name}
-                            className="w-full h-full object-cover rounded"
-                            onError={(e) => {
-                              e.target.onerror = null;
-                              e.target.src = 'https://via.placeholder.com/150?text=No+Image';
-                            }}
-                          />
-                        </div>
-                        <h3 className="font-medium text-gray-900">{product.name}</h3>
-                        <p className="text-sm text-gray-500">${product.price?.toFixed(2) || '0.00'}</p>
-                      </motion.div>
-                    ))}
+                    {filteredProducts.map((product) => renderProduct(product))}
                   </div>
                 )}
               </div>
@@ -569,9 +715,14 @@ export default function SelfCheckoutMode() {
           <div className="lg:col-span-1">
             <div className="bg-white rounded-lg shadow-md p-6">
               <CheckoutSummary
-                subtotal={subtotal}
+                {...calculateTotal()}
                 onDiscountApplied={handleDiscountApplied}
+                selectedDiscount={selectedDiscount}
+                onDiscountSelect={handleDiscountSelect}
+                activeDiscounts={activeDiscounts}
               />
+              
+              {renderDiscountSection()}
 
               <div className="mt-6 space-y-4">
                 <button
