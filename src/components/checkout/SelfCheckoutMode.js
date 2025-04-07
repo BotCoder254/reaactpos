@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { FiShoppingCart, FiAlertCircle, FiHelpCircle, FiUser, FiUserCheck, FiImage, FiCreditCard, FiUserPlus, FiPhone, FiMail } from 'react-icons/fi';
+import { FiShoppingCart, FiAlertCircle, FiHelpCircle, FiUser, FiUserCheck, FiImage, FiCreditCard, FiUserPlus, FiPhone, FiMail, FiTrash2 } from 'react-icons/fi';
 import { useNavigate, useParams } from 'react-router-dom';
 import CheckoutSummary from './CheckoutSummary';
 import { db } from '../../firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, onSnapshot } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 
 export default function SelfCheckoutMode() {
@@ -19,7 +19,8 @@ export default function SelfCheckoutMode() {
   const [showCustomerForm, setShowCustomerForm] = useState(true);
   const [isRequestingAssistance, setIsRequestingAssistance] = useState(false);
   const navigate = useNavigate();
-  const { stationId } = useParams();
+  const params = useParams();
+  const currentStationId = params.stationId || 'default';
   const [processing, setProcessing] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [searchTerm, setSearchTerm] = useState('');
@@ -35,12 +36,23 @@ export default function SelfCheckoutMode() {
         
         const loadedProducts = snapshot.docs.map(doc => {
           const data = doc.data();
+          let imageUrl = null;
+          
+          // Handle different image field formats
+          if (data.image && typeof data.image === 'string') {
+            imageUrl = data.image;
+          } else if (data.images && Array.isArray(data.images)) {
+            imageUrl = data.images[0]?.url || data.images[0];
+          } else if (data.imageUrl) {
+            imageUrl = data.imageUrl;
+          }
+          
           return {
             id: doc.id,
             ...data,
             price: Number(data.price) || 0,
             stock: Number(data.stock) || 0,
-            image: data.image || data.images?.[0]?.url || 'https://via.placeholder.com/150?text=No+Image',
+            image: imageUrl || 'https://via.placeholder.com/150?text=No+Image',
             category: data.category || 'Uncategorized'
           };
         });
@@ -97,7 +109,7 @@ export default function SelfCheckoutMode() {
       await addDoc(collection(db, 'self-checkout-logs'), {
         action: 'add_item',
         itemId: item.id,
-        stationId: stationId || 'default',
+        stationId: currentStationId,
         timestamp: new Date(),
         value: item.price,
         customerDetails
@@ -123,13 +135,36 @@ export default function SelfCheckoutMode() {
       await addDoc(collection(db, 'self-checkout-logs'), {
         action: 'remove_item',
         itemId: item.id,
-        stationId: stationId || 'default',
-        timestamp: serverTimestamp(),
-        value: item.price
+        stationId: currentStationId,
+        timestamp: new Date(),
+        value: item.price,
+        customerDetails
       });
+
+      toast.success('Item removed from cart');
     } catch (error) {
-      console.error('Error logging removal:', error);
+      console.error('Error removing item:', error);
       toast.error('Failed to remove item');
+    }
+  };
+
+  const handleDeleteItem = async (item) => {
+    try {
+      setCart(prev => prev.filter(i => i.id !== item.id));
+
+      await addDoc(collection(db, 'self-checkout-logs'), {
+        action: 'delete_item',
+        itemId: item.id,
+        stationId: currentStationId,
+        timestamp: new Date(),
+        value: item.price * item.quantity,
+        customerDetails
+      });
+
+      toast.success('Item removed from cart');
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      toast.error('Failed to delete item');
     }
   };
 
@@ -142,22 +177,25 @@ export default function SelfCheckoutMode() {
 
     setIsRequestingAssistance(true);
     try {
+      // First, ensure the station document exists
+      const stationRef = doc(db, 'self-checkout-stations', currentStationId);
+      await setDoc(stationRef, {
+        status: 'active',
+        needsAssistance: true,
+        lastAssistanceRequest: new Date(),
+        currentCustomer: customerDetails,
+        isRemoteControlled: false,
+        controlledBy: null
+      }, { merge: true });
+
       // Create assistance request document
       const assistanceRef = await addDoc(collection(db, 'assistance-requests'), {
-        stationId: stationId || 'default',
+        stationId: currentStationId,
         timestamp: new Date(),
         status: 'pending',
         currentCustomer: customerDetails,
         cart,
         subtotal
-      });
-
-      // Update station status
-      const stationRef = doc(db, 'self-checkout-stations', stationId || 'default');
-      await updateDoc(stationRef, {
-        needsAssistance: true,
-        lastAssistanceRequest: new Date(),
-        currentCustomer: customerDetails
       });
 
       toast.success('Assistance request sent successfully');
@@ -194,7 +232,7 @@ export default function SelfCheckoutMode() {
       // Log the transaction
       await addDoc(collection(db, 'self-checkout-logs'), {
         action: 'payment_initiated',
-        stationId: stationId || 'default',
+        stationId: currentStationId,
         timestamp: serverTimestamp(),
         paymentMethod: method,
         total: subtotal - discountAmount,
@@ -446,21 +484,17 @@ export default function SelfCheckoutMode() {
                         className="border rounded-lg p-4 cursor-pointer"
                         onClick={() => handleAddItem(product)}
                       >
-                        {product.image ? (
+                        <div className="relative w-full h-32 mb-2">
                           <img 
                             src={product.image} 
-                            alt={product.name} 
-                            className="w-full h-32 object-cover rounded mb-2"
+                            alt={product.name}
+                            className="w-full h-full object-cover rounded"
                             onError={(e) => {
                               e.target.onerror = null;
-                              e.target.src = 'https://via.placeholder.com/150';
+                              e.target.src = 'https://via.placeholder.com/150?text=No+Image';
                             }}
                           />
-                        ) : (
-                          <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded mb-2">
-                            <FiImage className="w-8 h-8 text-gray-400" />
-                          </div>
-                        )}
+                        </div>
                         <h3 className="font-medium text-gray-900">{product.name}</h3>
                         <p className="text-sm text-gray-500">${product.price?.toFixed(2) || '0.00'}</p>
                       </motion.div>
@@ -475,21 +509,17 @@ export default function SelfCheckoutMode() {
                 {cart.map((item) => (
                   <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg mb-4">
                     <div className="flex items-center space-x-4">
-                      {item.image ? (
+                      <div className="relative w-16 h-16">
                         <img 
                           src={item.image} 
                           alt={item.name} 
-                          className="w-16 h-16 object-cover rounded"
+                          className="w-full h-full object-cover rounded"
                           onError={(e) => {
                             e.target.onerror = null;
-                            e.target.src = 'https://via.placeholder.com/150';
+                            e.target.src = 'https://via.placeholder.com/150?text=No+Image';
                           }}
                         />
-                      ) : (
-                        <div className="w-16 h-16 bg-gray-100 flex items-center justify-center rounded">
-                          <FiImage className="w-6 h-6 text-gray-400" />
-                        </div>
-                      )}
+                      </div>
                       <div>
                         <h3 className="text-lg font-medium text-gray-900">{item.name}</h3>
                         <p className="text-sm text-gray-500">${item.price?.toFixed(2) || '0.00'} each</p>
@@ -512,6 +542,14 @@ export default function SelfCheckoutMode() {
                         className="p-2 text-gray-400 hover:text-gray-500 rounded-full hover:bg-gray-100"
                       >
                         +
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        onClick={() => handleDeleteItem(item)}
+                        className="p-2 text-red-400 hover:text-red-500 rounded-full hover:bg-red-50"
+                      >
+                        <FiTrash2 className="w-5 h-5" />
                       </motion.button>
                     </div>
                   </div>
