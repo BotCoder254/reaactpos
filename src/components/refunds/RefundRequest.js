@@ -49,16 +49,22 @@ export default function RefundRequest() {
         setProducts(fetchedProducts);
       } catch (err) {
         console.error('Error fetching products:', err);
+        toast.error('Failed to load products');
       }
     };
+
     const fetchOrders = async () => {
       try {
         const fetchedOrders = await getOrders();
-        setOrders(fetchedOrders);
+        // Sort orders by date on the client side
+        const sortedOrders = fetchedOrders.sort((a, b) => b.createdAt - a.createdAt);
+        setOrders(sortedOrders);
       } catch (err) {
         console.error('Error fetching orders:', err);
+        toast.error('Failed to load orders');
       }
     };
+
     fetchProducts();
     fetchOrders();
   }, []);
@@ -110,24 +116,21 @@ export default function RefundRequest() {
     }
 
     try {
-      // Clean and validate data before submission
       const refundData = {
         orderId: orderId.trim(),
         amount: parseFloat(amount) || 0,
         reason: reason.trim(),
         productId: selectedProduct?.id || '',
         productName: selectedProduct?.name || '',
-        productSKU: selectedProduct?.sku || '',  // Add fallback for undefined SKU
-        timestamp: new Date(),
+        productSKU: selectedProduct?.sku || '',
+        timestamp: new Date(), // Use client-side timestamp
         status: 'pending'
       };
 
-      // Only add receipt if it exists
       if (receipt) {
         refundData.receipt = receipt;
       }
 
-      // Additional validation
       if (refundData.amount <= 0) {
         setSubmitError('Refund amount must be greater than 0');
         return;
@@ -144,6 +147,8 @@ export default function RefundRequest() {
       setSelectedProduct(null);
       setSearchTerm('');
       setOrderSearchTerm('');
+      
+      toast.success('Refund request submitted successfully');
     } catch (err) {
       console.error('Refund submission error:', err);
       setSubmitError(err.message || 'Failed to create refund request. Please try again.');

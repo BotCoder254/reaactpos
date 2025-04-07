@@ -48,6 +48,9 @@ import { InvoiceCustomizationProvider } from './contexts/InvoiceCustomizationCon
 import InvoiceCustomizer from './components/invoices/InvoiceCustomizer';
 import CashierInvoiceOptions from './components/invoices/CashierInvoiceOptions';
 import InvoicePreview from './components/invoices/InvoicePreview';
+import SelfCheckoutMode from './components/checkout/SelfCheckoutMode';
+import SelfCheckoutMonitor from './components/checkout/SelfCheckoutMonitor';
+import RemoteAssistance from './components/checkout/RemoteAssistance';
 
 // Import Shift Management Components
 import ShiftCalendar from './components/shifts/ShiftCalendar';
@@ -64,9 +67,10 @@ function AppContent() {
   const { effectiveRole } = useRole();
   const { currentUser } = useAuth();
   const isAuthPage = location.pathname === '/login' || location.pathname === '/signup';
+  const isSelfCheckout = location.pathname.startsWith('/self-checkout');
 
-  // Redirect to login if no user
-  if (!currentUser && !isAuthPage) {
+  // Remove the redirect for self-checkout routes
+  if (!currentUser && !isAuthPage && !isSelfCheckout) {
     return <Navigate to="/login" replace />;
   }
 
@@ -80,14 +84,20 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {!isAuthPage && <Sidebar />}
-      <div className={!isAuthPage ? "md:pl-64 flex flex-col min-h-screen" : ""}>
-        {!isAuthPage && <DiscountBanner />}
+      {!isAuthPage && !isSelfCheckout && <Sidebar />}
+      <div className={!isAuthPage && !isSelfCheckout ? "md:pl-64 flex flex-col min-h-screen" : "flex flex-col min-h-screen"}>
+        {!isAuthPage && !isSelfCheckout && <DiscountBanner />}
         <main className="flex-1 py-6">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route path="/signup" element={<Signup />} />
+              
+              {/* Self-checkout routes - No authentication required */}
+              <Route path="/self-checkout" element={<SelfCheckoutMode />} />
+              <Route path="/self-checkout/:stationId" element={<SelfCheckoutMode />} />
+              
+              {/* Protected routes */}
               <Route path="/" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
               <Route path="/pos" element={<PrivateRoute><POS /></PrivateRoute>} />
               <Route path="/sales" element={<PrivateRoute><Sales /></PrivateRoute>} />
@@ -215,11 +225,25 @@ function AppContent() {
                   />
                 </PrivateRoute>
               } />
+
+              {/* Self-checkout routes - No authentication required */}
+              <Route path="/self-checkout" element={<SelfCheckoutMode />} />
+              <Route path="/self-checkout/:stationId" element={<SelfCheckoutMode />} />
+              <Route path="/monitor" element={
+                <PrivateRoute>
+                  {handleRoleAccess(SelfCheckoutMonitor, 'manager')}
+                </PrivateRoute>
+              } />
+              <Route path="/remote-assistance" element={
+                <PrivateRoute>
+                  {handleRoleAccess(RemoteAssistance, 'cashier')}
+                </PrivateRoute>
+              } />
             </Routes>
           </div>
         </main>
       </div>
-      {!isAuthPage && <RoleSwitcher />}
+      {!isAuthPage && !isSelfCheckout && <RoleSwitcher />}
       <Toaster position="top-right" />
     </div>
   );
