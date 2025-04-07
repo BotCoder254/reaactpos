@@ -264,7 +264,7 @@ export default function SelfCheckoutMonitor() {
                     <div className="text-right">
                       <p className="text-sm text-gray-500">Current Total</p>
                       <p className="font-medium text-gray-900">
-                        ${station.currentTransaction.total.toFixed(2)}
+                        ${(station.currentTransaction?.total || 0).toFixed(2)}
                       </p>
                     </div>
                   )}
