@@ -16,7 +16,7 @@ export default function SelfCheckoutMode() {
   const [loading, setLoading] = useState(true);
   const [products, setProducts] = useState([]);
   const [customerDetails, setCustomerDetails] = useState(null);
-  const [showCustomerForm, setShowCustomerForm] = useState(false);
+  const [showCustomerForm, setShowCustomerForm] = useState(true);
   const [isRequestingAssistance, setIsRequestingAssistance] = useState(false);
   const navigate = useNavigate();
   const { stationId } = useParams();
@@ -40,7 +40,7 @@ export default function SelfCheckoutMode() {
             ...data,
             price: Number(data.price) || 0,
             stock: Number(data.stock) || 0,
-            image: data.images?.[0]?.url || 'https://via.placeholder.com/150',
+            image: data.image || data.images?.[0]?.url || 'https://via.placeholder.com/150?text=No+Image',
             category: data.category || 'Uncategorized'
           };
         });
@@ -77,6 +77,12 @@ export default function SelfCheckoutMode() {
   }, [cart]);
 
   const handleAddItem = async (item) => {
+    if (!customerDetails) {
+      setShowCustomerForm(true);
+      toast.error('Please enter your details first');
+      return;
+    }
+
     try {
       setCart(prev => {
         const existingItem = prev.find(i => i.id === item.id);
@@ -92,8 +98,9 @@ export default function SelfCheckoutMode() {
         action: 'add_item',
         itemId: item.id,
         stationId: stationId || 'default',
-        timestamp: serverTimestamp(),
-        value: item.price
+        timestamp: new Date(),
+        value: item.price,
+        customerDetails
       });
     } catch (error) {
       console.error('Error logging action:', error);
@@ -129,16 +136,16 @@ export default function SelfCheckoutMode() {
   const handleRequestAssistance = async () => {
     if (!customerDetails) {
       setShowCustomerForm(true);
+      toast.error('Please enter your details first');
       return;
     }
 
     setIsRequestingAssistance(true);
     try {
-      // Create assistance request document with a client-generated timestamp
-      const timestamp = new Date();
+      // Create assistance request document
       const assistanceRef = await addDoc(collection(db, 'assistance-requests'), {
         stationId: stationId || 'default',
-        timestamp,
+        timestamp: new Date(),
         status: 'pending',
         currentCustomer: customerDetails,
         cart,
@@ -146,16 +153,17 @@ export default function SelfCheckoutMode() {
       });
 
       // Update station status
-      await updateDoc(doc(db, 'self-checkout-stations', stationId || 'default'), {
+      const stationRef = doc(db, 'self-checkout-stations', stationId || 'default');
+      await updateDoc(stationRef, {
         needsAssistance: true,
-        lastAssistanceRequest: timestamp,
+        lastAssistanceRequest: new Date(),
         currentCustomer: customerDetails
       });
 
       toast.success('Assistance request sent successfully');
     } catch (error) {
       console.error('Error requesting assistance:', error);
-      toast.error('Failed to request assistance');
+      toast.error('Failed to request assistance. Please try again.');
     } finally {
       setIsRequestingAssistance(false);
     }
@@ -252,7 +260,7 @@ export default function SelfCheckoutMode() {
     </motion.div>
   );
 
-  // Customer Form Component
+  // Customer Form Component with improved styling
   const CustomerForm = ({ onSubmit, onCancel }) => {
     const [formData, setFormData] = useState({
       name: '',
@@ -275,53 +283,56 @@ export default function SelfCheckoutMode() {
         <motion.div
           initial={{ scale: 0.9 }}
           animate={{ scale: 1 }}
-          className="bg-white rounded-lg p-6 max-w-md w-full mx-4"
+          className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-xl"
         >
-          <h2 className="text-xl font-semibold mb-4">Your Details</h2>
-          <form onSubmit={handleSubmit} className="space-y-4">
+          <h2 className="text-2xl font-semibold mb-6 text-gray-900">Enter Your Details</h2>
+          <form onSubmit={handleSubmit} className="space-y-6">
             <div>
-              <label className="block text-sm font-medium text-gray-700">Name</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
               <input
                 type="text"
                 required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                placeholder="Enter your full name"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Phone</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
               <input
                 type="tel"
                 required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                 value={formData.phone}
                 onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                placeholder="Enter your phone number"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
               <input
                 type="email"
                 required
-                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-primary-500 focus:ring-primary-500"
+                className="w-full h-12 px-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 text-gray-900"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                placeholder="Enter your email address"
               />
             </div>
-            <div className="flex justify-end space-x-3 mt-6">
+            <div className="flex justify-end space-x-4 mt-8">
               <button
                 type="button"
                 onClick={onCancel}
-                className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50"
+                className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700"
+                className="px-6 py-3 bg-primary-600 text-white rounded-lg hover:bg-primary-700 font-medium"
               >
-                Submit
+                Continue Shopping
               </button>
             </div>
           </form>
@@ -338,9 +349,15 @@ export default function SelfCheckoutMode() {
             onSubmit={(details) => {
               setCustomerDetails(details);
               setShowCustomerForm(false);
-              handleRequestAssistance();
+              toast.success('Welcome! You can now start shopping.');
             }}
-            onCancel={() => setShowCustomerForm(false)}
+            onCancel={() => {
+              if (customerDetails) {
+                setShowCustomerForm(false);
+              } else {
+                toast.error('Please enter your details to continue');
+              }
+            }}
           />
         )}
       </AnimatePresence>
