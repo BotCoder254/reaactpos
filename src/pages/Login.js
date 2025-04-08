@@ -75,7 +75,7 @@ export default function Login() {
           <div className="space-y-4 text-lg">
             <p>Transform your business with our cutting-edge POS solution. Seamlessly manage transactions, inventory, and customer relationships all in one powerful platform.</p>
             <p>Features include:</p>
-            <ul className="list-disc list-inside space-y-2 ml-4">
+            <ul className="list-disc list-inside space-y-2 ml-4 text-primary-600">
               <li>Smart Inventory Management</li>
               <li>Real-time Analytics Dashboard</li>
               <li>Secure Payment Processing</li>

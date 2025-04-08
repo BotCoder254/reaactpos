@@ -73,7 +73,7 @@ export default function Signup() {
           <div className="space-y-4 text-lg">
             <p>Step into the future of retail management with ReactPOS. Our modern solution brings enterprise-level features to businesses of all sizes.</p>
             <p>Why choose ReactPOS:</p>
-            <ul className="list-disc list-inside space-y-2 ml-4">
+            <ul className="list-disc list-inside space-y-2 ml-4 text-primary-600">
               <li>Cloud-Based Architecture</li>
               <li>AI-Powered Insights</li>
               <li>Fraud Detection System</li>
