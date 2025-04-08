@@ -67,12 +67,12 @@ export default function Login() {
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="hidden lg:block w-1/2 bg-primary-500"
+        className="hidden lg:block lg:w-1/2 relative overflow-hidden w-full h-full"
       >
         <img
-          src="https://images.unsplash.com/photo-1556740738-b6a63e27c4df?ixlib=rb-4.0.3"
+          src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3"
           alt="POS System"
-          className="w-full h-full object-cover"
+          className="absolute inset-0 w-full h-full object-cover  "
         />
       </motion.div>
 

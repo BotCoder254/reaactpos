@@ -59,20 +59,20 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Left side - Image */}
-      <motion.div 
-        initial={{ x: -100, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-        className="hidden lg:block w-1/2 bg-primary-500"
-      >
-        <img
-          src="https://images.unsplash.com/photo-1441986300917-64674bd600d8?ixlib=rb-4.0.3"
-          alt="Store Management"
-          className="w-full h-full object-cover"
-        />
-      </motion.div>
+    <div className="min-h-screen flex w-full h-full">
+  {/* Left side - Image */}
+  <motion.div 
+    initial={{ x: -100, opacity: 0 }}
+    animate={{ x: 0, opacity: 1 }}
+    transition={{ duration: 0.5 }}
+    className="hidden lg:block lg:w-1/2 relative w-full h-full"
+  >
+    <img
+      src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3"
+      alt="Store Management"
+      className="w-full h-full object-cover inset-0 absolute"
+    />
+  </motion.div>
 
       {/* Right side - Signup Form */}
       <motion.div 
