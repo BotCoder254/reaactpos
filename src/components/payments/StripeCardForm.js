@@ -27,23 +27,32 @@ const PaymentForm = ({ clientSecret, amount, onSuccess, onCancel }) => {
     setProcessing(true);
     setError(null);
 
-    const { error: submitError } = await elements.submit();
-    if (submitError) {
-      setError(submitError.message);
-      setProcessing(false);
-      return;
-    }
+    try {
+      const { error: submitError } = await elements.submit();
+      if (submitError) {
+        setError(submitError.message);
+        setProcessing(false);
+        return;
+      }
 
-    const { error: paymentError } = await stripe.confirmPayment({
-      elements,
-      redirect: 'if_required'
-    });
+      const { error: paymentError } = await stripe.confirmPayment({
+        elements,
+        redirect: 'if_required',
+        confirmParams: {
+          return_url: window.location.origin + '/payment-complete'
+        }
+      });
 
-    if (paymentError) {
-      setError(paymentError.message);
+      if (paymentError) {
+        setError(paymentError.message);
+        setProcessing(false);
+      } else {
+        onSuccess();
+      }
+    } catch (err) {
+      console.error('Payment error:', err);
+      setError('An unexpected error occurred. Please try again.');
       setProcessing(false);
-    } else {
-      onSuccess();
     }
   };
 
@@ -89,15 +98,35 @@ const PaymentForm = ({ clientSecret, amount, onSuccess, onCancel }) => {
 
 const StripeCardForm = ({ amount, clientSecret, onSuccess, onCancel }) => {
   const [stripePromise, setStripePromise] = useState(null);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const loadStripeKey = async () => {
-      const response = await fetch(`${STRIPE_API_URL}/config`);
-      const { publishableKey } = await response.json();
-      setStripePromise(loadStripe(publishableKey));
+      try {
+        const response = await fetch(`${STRIPE_API_URL}/config`);
+        if (!response.ok) {
+          throw new Error('Failed to load Stripe configuration');
+        }
+        const { publishableKey } = await response.json();
+        if (!publishableKey) {
+          throw new Error('Invalid Stripe configuration');
+        }
+        setStripePromise(loadStripe(publishableKey));
+      } catch (err) {
+        console.error('Error loading Stripe:', err);
+        setError('Failed to initialize payment system. Please try again later.');
+      }
     };
     loadStripeKey();
   }, []);
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center p-6">
+        <div className="text-red-600">{error}</div>
+      </div>
+    );
+  }
 
   if (!stripePromise || !clientSecret) {
     return (
