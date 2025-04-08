@@ -59,20 +59,31 @@ export default function Signup() {
   }
 
   return (
-    <div className="min-h-screen flex w-full h-full">
-  {/* Left side - Image */}
-  <motion.div 
-    initial={{ x: -100, opacity: 0 }}
-    animate={{ x: 0, opacity: 1 }}
-    transition={{ duration: 0.5 }}
-    className="hidden lg:block lg:w-1/2 relative w-full h-full"
-  >
-    <img
-      src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3"
-      alt="Store Management"
-      className="w-full h-full object-cover inset-0 absolute"
-    />
-  </motion.div>
+    <div className="min-h-screen flex w-full">
+      {/* Left side - Image */}
+      <motion.div 
+        initial={{ x: -100, opacity: 0 }}
+        animate={{ x: 0, opacity: 1 }}
+        transition={{ duration: 0.5 }}
+        className="hidden lg:flex lg:w-1/2 "
+      >
+        <div className="flex flex-col justify-center p-8 bg-gradient-to-br  text-black">
+          <h1 className="text-4xl font-bold mb-4 text-primary-600">Join ReactPOS Today</h1>
+          <p className="text-xl mb-6">Empower Your Business Operations</p>
+          <div className="space-y-4 text-lg">
+            <p>Step into the future of retail management with ReactPOS. Our modern solution brings enterprise-level features to businesses of all sizes.</p>
+            <p>Why choose ReactPOS:</p>
+            <ul className="list-disc list-inside space-y-2 ml-4">
+              <li>Cloud-Based Architecture</li>
+              <li>AI-Powered Insights</li>
+              <li>Fraud Detection System</li>
+              <li>Integrated E-commerce</li>
+              <li>24/7 Technical Support</li>
+            </ul>
+            <p className="mt-6 italic">Join thousands of businesses already transforming their operations with ReactPOS.</p>
+          </div>
+        </div>
+      </motion.div>
 
       {/* Right side - Signup Form */}
       <motion.div 
@@ -83,7 +94,7 @@ export default function Signup() {
       >
         <div className="max-w-md w-full space-y-8">
           <div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 text-primary-600">
               Create your account
             </h2>
           </div>
