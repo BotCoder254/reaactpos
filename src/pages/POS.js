@@ -109,6 +109,7 @@ export default function POS() {
   const [stripeError, setStripeError] = useState(null);
   const [showCardForm, setShowCardForm] = useState(false);
   const [paymentClientSecret, setPaymentClientSecret] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -843,7 +844,22 @@ export default function POS() {
         throw new Error('Failed to save sale to database');
       }
 
-      // Clear cart and reset state
+      // Update inventory first
+      const updatePromises = cart.map(item => {
+        const productRef = doc(db, 'products', item.id);
+        return updateDoc(productRef, {
+          stock: increment(-(item.quantity))
+        });
+      });
+
+      await Promise.all(updatePromises);
+
+      // Update customer loyalty points if applicable
+      if (selectedCustomer && loyaltyProgram) {
+        await addPoints(selectedCustomer.id, totalAmount / 100);
+      }
+
+      // Reset all states
       setCart([]);
       setDiscountAmount(0);
       setTaxAmount(0);
@@ -851,20 +867,22 @@ export default function POS() {
       setShowCardForm(false);
       setPaymentClientSecret(null);
       
-      toast.success('Payment successful!');
+      // Refresh products by refetching categories and products
+      const productsRef = collection(db, 'products');
+      const productsSnapshot = await getDocs(productsRef);
+      const productsData = productsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProducts(productsData);
       
-      // Update inventory
-      for (const item of cart) {
-        const productRef = doc(db, 'products', item.id);
-        await updateDoc(productRef, {
-          stock: increment(-(item.quantity))
-        });
-      }
-      
-      // Update customer loyalty points if applicable
-      if (selectedCustomer && loyaltyProgram) {
-        await addPoints(selectedCustomer.id, totalAmount / 100);
-      }
+      toast.success('Payment successful!', {
+        onClose: () => {
+          // Reset search and filters
+          setSearchTerm('');
+          setSelectedCategory('all');
+        }
+      });
 
     } catch (error) {
       console.error('Error saving sale:', error);

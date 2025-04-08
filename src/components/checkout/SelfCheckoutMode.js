@@ -37,6 +37,7 @@ export default function SelfCheckoutMode() {
   const [stripeError, setStripeError] = useState(null);
   const [showCardForm, setShowCardForm] = useState(false);
   const [paymentClientSecret, setPaymentClientSecret] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -364,7 +365,17 @@ export default function SelfCheckoutMode() {
       console.log('Creating transaction log:', logData);
       await addDoc(collection(db, 'self-checkout-logs'), logData);
 
-      // Clear cart and reset state
+      // Update inventory first
+      const updatePromises = cart.map(item => {
+        const productRef = doc(db, 'products', item.id);
+        return updateDoc(productRef, {
+          stock: increment(-(item.quantity))
+        });
+      });
+
+      await Promise.all(updatePromises);
+
+      // Reset all states
       setCart([]);
       setDiscountAmount(0);
       setCustomerDetails(null);
@@ -372,16 +383,20 @@ export default function SelfCheckoutMode() {
       setShowCardForm(false);
       setPaymentClientSecret(null);
 
-      toast.success('Payment successful!');
+      // Refresh products by refetching from Firebase
+      const productsRef = collection(db, 'products');
+      const productsSnapshot = await getDocs(productsRef);
+      const productsData = productsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProducts(productsData);
+      
+      // Reset search and category
+      setSearchTerm('');
+      setSelectedCategory('all');
 
-      // Update inventory
-      console.log('Updating inventory for items:', cart);
-      for (const item of cart) {
-        const productRef = doc(db, 'products', item.id);
-        await updateDoc(productRef, {
-          stock: increment(-(item.quantity))
-        });
-      }
+      toast.success('Payment successful!');
 
     } catch (error) {
       console.error('Error saving sale:', error);

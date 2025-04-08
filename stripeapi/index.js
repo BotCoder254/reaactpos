@@ -8,7 +8,18 @@ const app = express();
 
 // Middleware
 app.use(express.json());
-app.use(cors());
+
+// Configure CORS with specific origin
+const corsOptions = {
+  origin: process.env.NODE_ENV === 'production' 
+    ? 'https://reaactpos-55uo.onrender.com'
+    : 'http://localhost:3000',
+  methods: ['GET', 'POST'],
+  allowedHeaders: ['Content-Type']
+};
+
+app.use(cors(corsOptions));
+
 app.use(express.static('public'));
 
 // Serve the payment page
