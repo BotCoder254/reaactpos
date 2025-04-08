@@ -1,4 +1,4 @@
-const STRIPE_API_URL = 'http://localhost:4242';
+const STRIPE_API_URL = 'https://reaactpos-55uo.onrender.com';
 
 export const getStripeConfig = async () => {
   const response = await fetch(`${STRIPE_API_URL}/config`);
