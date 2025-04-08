@@ -51,12 +51,16 @@ app.post('/create-payment-intent', async (req, res) => {
     const { amount, currency = 'usd', description } = req.body;
 
     if (!amount || amount <= 0) {
-      throw new Error('Invalid amount provided');
+      return res.status(400).json({
+        error: {
+          message: 'Invalid amount provided'
+        }
+      });
     }
 
     // Create a PaymentIntent with the order amount and currency
     const paymentIntent = await stripe.paymentIntents.create({
-      amount: Math.round(amount * 100), // Convert to cents
+      amount: Math.round(amount),
       currency,
       description,
       automatic_payment_methods: {
@@ -199,6 +203,17 @@ app.get('/payment-status/:paymentIntentId', async (req, res) => {
       }
     });
   }
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Server error:', err);
+  res.status(500).json({
+    error: {
+      message: 'Internal server error',
+      details: process.env.NODE_ENV === 'development' ? err.message : undefined
+    }
+  });
 });
 
 const port = process.env.PORT || 4242;

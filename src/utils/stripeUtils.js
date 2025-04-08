@@ -25,6 +25,7 @@ export const createPaymentIntent = async ({ amount, currency = 'usd', descriptio
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Accept': 'application/json'
       },
       body: JSON.stringify({ 
         amount: Math.round(amount), // Ensure amount is an integer
@@ -34,20 +35,34 @@ export const createPaymentIntent = async ({ amount, currency = 'usd', descriptio
     });
     
     if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.error?.message || 'Payment failed');
+      const errorText = await response.text();
+      let errorMessage = 'Payment failed';
+      
+      try {
+        const errorData = JSON.parse(errorText);
+        errorMessage = errorData.error?.message || errorMessage;
+      } catch (e) {
+        console.error('Error parsing error response:', e);
+        errorMessage = errorText || errorMessage;
+      }
+      
+      throw new Error(errorMessage);
     }
 
-    const data = await response.json();
-
-    // Log the response for debugging
-    console.log('Payment Intent Response:', data);
+    const responseText = await response.text();
+    let data;
+    
+    try {
+      data = JSON.parse(responseText);
+    } catch (e) {
+      console.error('Error parsing response:', e);
+      throw new Error('Invalid response from payment server');
+    }
 
     if (!data || typeof data !== 'object') {
       throw new Error('Invalid response from payment server');
     }
 
-    // Validate payment intent data
     if (!data.clientSecret || !data.paymentIntentId) {
       throw new Error('Invalid payment intent response');
     }
