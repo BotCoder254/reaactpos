@@ -67,13 +67,23 @@ export default function Login() {
         initial={{ x: -100, opacity: 0 }}
         animate={{ x: 0, opacity: 1 }}
         transition={{ duration: 0.5 }}
-        className="hidden lg:block w-1/2 bg-primary-500"
+        className="hidden lg:flex lg:w-1/2 "
       >
-        <img
-          src="https://images.unsplash.com/photo-1556740738-b6a63e27c4df?ixlib=rb-4.0.3"
-          alt="POS System"
-          className="w-full h-full object-cover"
-        />
+        <div className="flex flex-col justify-center p-8 bg-gradient-to-br  text-black">
+          <h1 className="text-4xl font-bold mb-4 text-primary-600">Welcome to ReactPOS</h1>
+          <p className="text-xl mb-6">Next-Generation Point of Sale System</p>
+          <div className="space-y-4 text-lg">
+            <p>Transform your business with our cutting-edge POS solution. Seamlessly manage transactions, inventory, and customer relationships all in one powerful platform.</p>
+            <p>Features include:</p>
+            <ul className="list-disc list-inside space-y-2 ml-4 text-primary-600">
+              <li>Smart Inventory Management</li>
+              <li>Real-time Analytics Dashboard</li>
+              <li>Secure Payment Processing</li>
+              <li>Customer Loyalty Program</li>
+              <li>Multi-location Support</li>
+            </ul>
+          </div>
+        </div>
       </motion.div>
 
       {/* Right side - Login Form */}
@@ -85,7 +95,7 @@ export default function Login() {
       >
         <div className="max-w-md w-full space-y-8">
           <div>
-            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
+            <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900 text-primary-600 ">
               Sign in to your account
             </h2>
           </div>
