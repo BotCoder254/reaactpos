@@ -4,10 +4,12 @@ import { FiShoppingCart, FiAlertCircle, FiHelpCircle, FiUser, FiUserCheck, FiIma
 import { useNavigate, useParams } from 'react-router-dom';
 import CheckoutSummary from './CheckoutSummary';
 import { db } from '../../firebase';
-import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, onSnapshot, setDoc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, getDocs, query, where, doc, updateDoc, onSnapshot, setDoc, increment } from 'firebase/firestore';
 import { toast } from 'react-hot-toast';
 import { getActiveDiscounts, calculateDiscount } from '../../utils/discountQueries';
 import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../../utils/dynamicPricingQueries';
+import { getStripeConfig, createPaymentIntent } from '../../utils/stripeUtils';
+import StripeCardForm from '../payments/StripeCardForm';
 
 export default function SelfCheckoutMode() {
   const [cart, setCart] = useState([]);
@@ -31,6 +33,11 @@ export default function SelfCheckoutMode() {
   const [selectedDiscount, setSelectedDiscount] = useState(null);
   const [dynamicPricingRules, setDynamicPricingRules] = useState([]);
   const [originalPrices, setOriginalPrices] = useState({});
+  const [stripeLoading, setStripeLoading] = useState(false);
+  const [stripeError, setStripeError] = useState(null);
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [paymentClientSecret, setPaymentClientSecret] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState('all');
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -269,35 +276,145 @@ export default function SelfCheckoutMode() {
     }
   };
 
-  const handlePayment = async (method) => {
+  const handleStripePayment = async () => {
     try {
+      setStripeLoading(true);
+      setStripeError(null);
       setProcessing(true);
-      setSelectedPaymentMethod(method);
 
-      // Log the transaction
-      await addDoc(collection(db, 'self-checkout-logs'), {
-        action: 'payment_initiated',
-        stationId: currentStationId,
-        timestamp: serverTimestamp(),
-        paymentMethod: method,
-        total: subtotal - discountAmount,
-        items: cart
+      const totalAmount = Math.round((subtotal - discountAmount) * 100); // Convert to cents
+
+      if (!totalAmount || totalAmount <= 0) {
+        throw new Error('Invalid total amount');
+      }
+
+      const description = `Self-checkout purchase of ${cart.length} items`;
+
+      console.log('Creating payment intent with amount:', totalAmount);
+
+      // Create payment intent first
+      const stripeData = await createPaymentIntent({
+        amount: totalAmount,
+        description
       });
 
-      // Simulate payment processing
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      console.log('Payment intent response:', stripeData);
 
-      // Clear cart after successful payment
-      setCart([]);
-      setSubtotal(0);
-      setDiscountAmount(0);
+      if (!stripeData || !stripeData.paymentIntentId) {
+        throw new Error('Invalid payment intent response');
+      }
 
-      toast.success('Payment successful! Thank you for shopping.');
-    } catch (error) {
-      console.error('Payment error:', error);
-      toast.error('Payment failed. Please try again or seek assistance.');
-    } finally {
+      // Store payment intent data and show card form
+      setPaymentClientSecret(stripeData.clientSecret);
+      setShowCardForm(true);
+      setStripeLoading(false);
       setProcessing(false);
+
+    } catch (error) {
+      console.error('Payment failed:', error);
+      setStripeError(error.message);
+      toast.error(`Payment failed: ${error.message}`);
+      setStripeLoading(false);
+      setProcessing(false);
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
+    try {
+      const totalAmount = Math.round((subtotal - discountAmount) * 100);
+
+      // Create sale record
+      const saleData = {
+        items: cart.map(item => ({
+          id: item.id,
+          name: item.name,
+          price: item.price,
+          quantity: item.quantity,
+          subtotal: item.price * item.quantity
+        })),
+        subtotal,
+        discount: discountAmount,
+        total: totalAmount / 100,
+        paymentMethod: 'card',
+        customerId: customerDetails?.id || null,
+        stationId: currentStationId,
+        timestamp: serverTimestamp(),
+        status: 'completed'
+      };
+
+      console.log('Saving sale data:', saleData);
+
+      // Save to Firebase
+      const salesRef = collection(db, 'sales');
+      const docRef = await addDoc(salesRef, saleData);
+
+      if (!docRef.id) {
+        throw new Error('Failed to save sale to database');
+      }
+
+      // Log the transaction
+      const logData = {
+        action: 'payment_completed',
+        stationId: currentStationId,
+        saleId: docRef.id,
+        timestamp: serverTimestamp(),
+        paymentMethod: 'card',
+        total: totalAmount / 100
+      };
+
+      console.log('Creating transaction log:', logData);
+      await addDoc(collection(db, 'self-checkout-logs'), logData);
+
+      // Update inventory first
+      const updatePromises = cart.map(item => {
+        const productRef = doc(db, 'products', item.id);
+        return updateDoc(productRef, {
+          stock: increment(-(item.quantity))
+        });
+      });
+
+      await Promise.all(updatePromises);
+
+      // Reset all states
+      setCart([]);
+      setDiscountAmount(0);
+      setCustomerDetails(null);
+      setShowCustomerForm(true);
+      setShowCardForm(false);
+      setPaymentClientSecret(null);
+
+      // Refresh products by refetching from Firebase
+      const productsRef = collection(db, 'products');
+      const productsSnapshot = await getDocs(productsRef);
+      const productsData = productsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setProducts(productsData);
+      
+      // Reset search and category
+      setSearchTerm('');
+      setSelectedCategory('all');
+
+      toast.success('Payment successful!');
+
+    } catch (error) {
+      console.error('Error saving sale:', error);
+      toast.error('Payment successful but failed to save sale');
+    }
+  };
+
+  const handlePaymentCancel = () => {
+    setShowCardForm(false);
+    setPaymentClientSecret(null);
+    setStripeLoading(false);
+    setProcessing(false);
+  };
+
+  const handlePayment = (method) => {
+    setSelectedPaymentMethod(method);
+    if (method === 'card') {
+      handleStripePayment();
     }
   };
 
@@ -656,49 +773,39 @@ export default function SelfCheckoutMode() {
           </div>
 
           <div className="mt-6 space-y-4">
-            <button
-              onClick={() => handlePayment('cash')}
-              disabled={cart.length === 0 || processing}
-              className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-            >
-              {processing && selectedPaymentMethod === 'cash' ? (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                />
-              ) : (
-                <>
-                  <FiShoppingCart className="mr-2 h-5 w-5" />
-                  Pay with Cash
-                </>
-              )}
-            </button>
-
-            <button
-              onClick={() => handlePayment('card')}
-              disabled={cart.length === 0 || processing}
-              className="w-full flex items-center justify-center px-4 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-primary-600 hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary-500 disabled:opacity-50"
-            >
-              {processing && selectedPaymentMethod === 'card' ? (
-                <motion.div
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-                  className="w-5 h-5 border-2 border-white border-t-transparent rounded-full"
-                />
-              ) : (
-                <>
-                  <FiCreditCard className="mr-2 h-5 w-5" />
-                  Pay with Card
-                </>
-              )}
-            </button>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <button
+                onClick={() => handlePayment('cash')}
+                disabled={cart.length === 0 || processing}
+                className="w-full py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                {processing ? 'Processing...' : 'Pay with Cash'}
+              </button>
+              <button
+                onClick={() => handlePayment('card')}
+                disabled={cart.length === 0 || processing || stripeLoading}
+                className="w-full py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50"
+              >
+                {processing || stripeLoading ? 'Processing...' : 'Pay with Card'}
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       <AnimatePresence>
         {showLoginModal && <LoginModal />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showCardForm && paymentClientSecret && (
+          <StripeCardForm
+            amount={Math.round((subtotal - discountAmount) * 100)}
+            clientSecret={paymentClientSecret}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        )}
       </AnimatePresence>
 
       <motion.button

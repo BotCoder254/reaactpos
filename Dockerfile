@@ -1,28 +1,38 @@
-# Use Node.js 18 as the base image
-FROM node:18-alpine
+# Build stage
+FROM node:18-alpine as build
 
-# Set working directory
 WORKDIR /app
 
 # Copy package files
 COPY package*.json ./
+COPY stripeapi/package*.json ./stripeapi/
 
-# Install dependencies with legacy peer deps
+# Install dependencies
 RUN npm install --legacy-peer-deps
+RUN cd stripeapi && npm install
 
-# Copy the rest of the application
+# Copy source code
 COPY . .
 
-# Build the application
+# Build React app
 RUN npm run build
 
+# Production stage
+FROM node:18-alpine
 
+WORKDIR /app
 
-# Install serve to run the application
+# Copy built React app and Stripe API
+COPY --from=build /app/build ./build
+COPY --from=build /app/stripeapi ./stripeapi
+
+# Install serve for React app
 RUN npm install -g serve
 
-# Expose the port
-EXPOSE 3000
+# Copy start script
+COPY start.sh .
+RUN chmod +x start.sh
 
-# Start the application
-CMD ["serve", "-s", "build", "-l", "3000"] 
+EXPOSE 3000 4242
+
+CMD ["./start.sh"]

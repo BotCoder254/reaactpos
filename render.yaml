@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: reaactpos-frontend
+    env: static
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    staticPublishPath: ./build
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REACT_APP_STRIPE_API_URL
+        fromService:
+          name: reaactpos-stripe-api
+          type: web
+          property: url
+
+  - type: web
+    name: reaactpos-stripe-api
+    env: node
+    buildCommand: cd stripeapi && npm install
+    startCommand: cd stripeapi && node index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FRONTEND_URL
+        value: https://reaactpos-55uo.onrender.com
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_PUBLISHABLE_KEY
+        sync: false
