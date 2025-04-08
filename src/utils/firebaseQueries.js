@@ -121,7 +121,7 @@ export async function getDashboardStats() {
 
   // Get today's sales
   const todaySales = await getDailySales();
-  const totalSales = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+  const totalSales = parseFloat(todaySales.reduce((sum, sale) => sum + sale.total, 0));
   
   // Get total transactions
   const salesRef = collection(db, 'sales');
