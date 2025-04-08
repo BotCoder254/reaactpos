@@ -350,7 +350,7 @@ export default function POS() {
           }).filter(img => img && (typeof img.url === 'string'))
         : []
     };
-    
+
     setCart(prevCart => {
       const existingItem = prevCart.find(item => item.id === product.id);
       if (existingItem) {
@@ -871,7 +871,7 @@ export default function POS() {
       const productsRef = collection(db, 'products');
       const productsSnapshot = await getDocs(productsRef);
       const productsData = productsSnapshot.docs.map(doc => ({
-        id: doc.id,
+          id: doc.id,
         ...doc.data()
       }));
       setProducts(productsData);
@@ -879,8 +879,8 @@ export default function POS() {
       toast.success('Payment successful!', {
         onClose: () => {
           // Reset search and filters
-          setSearchTerm('');
-          setSelectedCategory('all');
+      setSearchTerm('');
+      setSelectedCategory('all');
         }
       });
 

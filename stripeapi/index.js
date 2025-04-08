@@ -12,13 +12,17 @@ app.use(express.json());
 // Configure CORS with specific origin
 const corsOptions = {
   origin: process.env.NODE_ENV === 'production' 
-    ? 'https://reaactpos-55uo.onrender.com'
+    ? ['https://reaactpos-55uo.onrender.com', 'http://localhost:3000']
     : 'http://localhost:3000',
-  methods: ['GET', 'POST'],
-  allowedHeaders: ['Content-Type']
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 };
 
 app.use(cors(corsOptions));
+
+// Enable pre-flight requests for all routes
+app.options('*', cors(corsOptions));
 
 app.use(express.static('public'));
 
