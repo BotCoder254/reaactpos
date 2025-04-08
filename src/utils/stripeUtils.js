@@ -1,4 +1,7 @@
-const STRIPE_API_URL = 'https://reaactpos-55uo.onrender.com';
+const STRIPE_API_URL = process.env.NODE_ENV === 'production'
+  ? 'https://reaactpos-55uo.onrender.com'
+  : 'http://localhost:4242';
+
 
 export const getStripeConfig = async () => {
   const response = await fetch(`${STRIPE_API_URL}/config`);
