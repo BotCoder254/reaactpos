@@ -25,7 +25,7 @@ const cartSlice = createSlice({
       }
       
       // Update products mapping
-      state.products[product.id] = product;
+      state.products[product.id] = { ...product, inCart: true };
     },
     updateQuantity: (state, action) => {
       const { productId, change } = action.payload;
@@ -34,11 +34,19 @@ const cartSlice = createSlice({
         item.quantity = Math.max(0, item.quantity + change);
         if (item.quantity === 0) {
           state.items = state.items.filter(item => item.id !== productId);
+          // Update product state when removed
+          if (state.products[productId]) {
+            state.products[productId].inCart = false;
+          }
         }
       }
     },
     removeFromCart: (state, action) => {
       state.items = state.items.filter(item => item.id !== action.payload);
+      // Update product state when removed
+      if (state.products[action.payload]) {
+        state.products[action.payload].inCart = false;
+      }
     },
     setDiscountAmount: (state, action) => {
       state.discountAmount = action.payload;
@@ -53,11 +61,16 @@ const cartSlice = createSlice({
       state.processing = action.payload;
     },
     resetCart: (state) => {
-      state.items = [];
-      state.discountAmount = 0;
-      state.discountCode = '';
-      state.showDiscountModal = false;
-      state.processing = false;
+      // Reset all product inCart states when cart is reset
+      Object.keys(state.products).forEach(productId => {
+        if (state.products[productId]) {
+          state.products[productId].inCart = false;
+        }
+      });
+      return {
+        ...initialState,
+        products: state.products
+      };
     },
     setProducts: (state, action) => {
       state.products = action.payload;

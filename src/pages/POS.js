@@ -511,8 +511,17 @@ export default function POS() {
       // Update inventory
       await updateInventoryAfterSale(cart);
 
-      // Reset cart
-      resetCart();
+      // Reset cart and product states
+      setCart([]);
+      setProducts(prev => {
+        const updated = { ...prev };
+        cart.forEach(item => {
+          if (updated[item.id]) {
+            updated[item.id] = { ...updated[item.id], inCart: false };
+          }
+        });
+        return updated;
+      });
 
       toast.success('Sale completed successfully');
       return savedSale;
@@ -844,9 +853,20 @@ export default function POS() {
       setShowCardForm(false);
       setPaymentClientSecret(null);
       
+      // Reset cart and product states
+      setCart([]);
+      setProducts(prev => {
+        const updated = { ...prev };
+        cart.forEach(item => {
+          if (updated[item.id]) {
+            updated[item.id] = { ...updated[item.id], inCart: false };
+          }
+        });
+        return updated;
+      });
+      
       toast.success('Payment successful!', {
         onClose: () => {
-          // Reset search and filters
           setSearchTerm('');
           setSelectedCategory('all');
         }
