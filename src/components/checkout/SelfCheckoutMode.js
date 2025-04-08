@@ -11,7 +11,7 @@ import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../../utils
 import { getStripeConfig, createPaymentIntent } from '../../utils/stripeUtils';
 import StripeCardForm from '../payments/StripeCardForm';
 
-export default function SelfCheckoutMode() {
+const SelfCheckoutMode = ({ stationId }) => {
   const [cart, setCart] = useState([]);
   const [subtotal, setSubtotal] = useState(0);
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -22,9 +22,11 @@ export default function SelfCheckoutMode() {
   const [customerDetails, setCustomerDetails] = useState(null);
   const [showCustomerForm, setShowCustomerForm] = useState(true);
   const [isRequestingAssistance, setIsRequestingAssistance] = useState(false);
+  const [showDiscountModal, setShowDiscountModal] = useState(false);
+  const [discountCode, setDiscountCode] = useState('');
+  const [currentStationId, setCurrentStationId] = useState(stationId || 'default-station');
   const navigate = useNavigate();
   const params = useParams();
-  const currentStationId = params.stationId || 'default';
   const [processing, setProcessing] = useState(false);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [searchTerm, setSearchTerm] = useState('');
@@ -75,6 +77,8 @@ export default function SelfCheckoutMode() {
       } catch (error) {
         console.error('Error loading products:', error);
         toast.error('Failed to load products. Please try again.');
+        setProducts([]);
+        setFilteredProducts([]);
       } finally {
         setLoading(false);
       }
@@ -84,6 +88,11 @@ export default function SelfCheckoutMode() {
   }, []);
 
   useEffect(() => {
+    if (!Array.isArray(products)) {
+      setFilteredProducts([]);
+      return;
+    }
+
     if (searchTerm.trim() === '') {
       setFilteredProducts(products);
     } else {
@@ -137,82 +146,105 @@ export default function SelfCheckoutMode() {
   }, [selectedDiscount, subtotal]);
 
   const handleAddItem = async (item) => {
-    if (!customerDetails) {
-      setShowCustomerForm(true);
-      toast.error('Please enter your details first');
-      return;
-    }
-
     try {
-      setCart(prev => {
-        const existingItem = prev.find(i => i.id === item.id);
-        if (existingItem) {
-          return prev.map(i => 
-            i.id === item.id ? { ...i, quantity: i.quantity + 1 } : i
-          );
-        }
-        return [...prev, { ...item, quantity: 1 }];
-      });
+      // Check if item is already in cart
+      const existingItem = cart.find(cartItem => cartItem.id === item.id);
+      
+      if (existingItem) {
+        // Update quantity if item exists
+        const updatedCart = cart.map(cartItem => 
+          cartItem.id === item.id 
+            ? { ...cartItem, quantity: cartItem.quantity + 1 }
+            : cartItem
+        );
+        setCart(updatedCart);
+      } else {
+        // Add new item to cart
+        setCart([...cart, { ...item, quantity: 1 }]);
+      }
 
+      // Update product state
+      setProducts(prev => ({
+        ...prev,
+        [item.id]: { ...item, inCart: true }
+      }));
+
+      // Log the action
       await addDoc(collection(db, 'self-checkout-logs'), {
         action: 'add_item',
-        itemId: item.id,
         stationId: currentStationId,
-        timestamp: new Date(),
-        value: item.price,
-        customerDetails
+        itemId: item.id,
+        itemName: item.name,
+        price: item.price,
+        timestamp: new Date()
       });
+
     } catch (error) {
-      console.error('Error logging action:', error);
-      toast.error('Failed to add item');
+      console.error('Error adding item:', error);
+      toast.error('Failed to add item to cart');
     }
   };
 
   const handleRemoveItem = async (item) => {
     try {
-      setCart(prev => {
-        const existingItem = prev.find(i => i.id === item.id);
-        if (existingItem.quantity > 1) {
-          return prev.map(i =>
-            i.id === item.id ? { ...i, quantity: i.quantity - 1 } : i
-          );
-        }
-        return prev.filter(i => i.id !== item.id);
-      });
+      // Update cart
+      const updatedCart = cart.map(cartItem => 
+        cartItem.id === item.id 
+          ? { ...cartItem, quantity: Math.max(0, cartItem.quantity - 1) }
+          : cartItem
+      ).filter(cartItem => cartItem.quantity > 0);
+      
+      setCart(updatedCart);
 
+      // Update product state if item is removed
+      if (!updatedCart.find(cartItem => cartItem.id === item.id)) {
+        setProducts(prev => ({
+          ...prev,
+          [item.id]: { ...prev[item.id], inCart: false }
+        }));
+      }
+
+      // Log the action
       await addDoc(collection(db, 'self-checkout-logs'), {
         action: 'remove_item',
-        itemId: item.id,
         stationId: currentStationId,
-        timestamp: new Date(),
-        value: item.price,
-        customerDetails
+        itemId: item.id,
+        itemName: item.name,
+        price: item.price,
+        timestamp: new Date()
       });
 
-      toast.success('Item removed from cart');
     } catch (error) {
       console.error('Error removing item:', error);
-      toast.error('Failed to remove item');
+      toast.error('Failed to remove item from cart');
     }
   };
 
   const handleDeleteItem = async (item) => {
     try {
-      setCart(prev => prev.filter(i => i.id !== item.id));
+      // Remove item from cart
+      const updatedCart = cart.filter(cartItem => cartItem.id !== item.id);
+      setCart(updatedCart);
 
+      // Update product state
+      setProducts(prev => ({
+        ...prev,
+        [item.id]: { ...prev[item.id], inCart: false }
+      }));
+
+      // Log the action
       await addDoc(collection(db, 'self-checkout-logs'), {
         action: 'delete_item',
-        itemId: item.id,
         stationId: currentStationId,
-        timestamp: new Date(),
-        value: item.price * item.quantity,
-        customerDetails
+        itemId: item.id,
+        itemName: item.name,
+        price: item.price,
+        timestamp: new Date()
       });
 
-      toast.success('Item removed from cart');
     } catch (error) {
       console.error('Error deleting item:', error);
-      toast.error('Failed to delete item');
+      toast.error('Failed to delete item from cart');
     }
   };
 
@@ -321,83 +353,34 @@ export default function SelfCheckoutMode() {
 
   const handlePaymentSuccess = async () => {
     try {
-      const totalAmount = Math.round((subtotal - discountAmount) * 100);
+      const total = calculateTotal();
+      const totalAmount = Math.round(total.total * 100);
 
-      // Create sale record
-      const saleData = {
-        items: cart.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          subtotal: item.price * item.quantity
-        })),
-        subtotal,
-        discount: discountAmount,
-        total: totalAmount / 100,
-        paymentMethod: 'card',
-        customerId: customerDetails?.id || null,
-        stationId: currentStationId,
-        timestamp: serverTimestamp(),
-        status: 'completed'
-      };
+      // Process the transaction
+      await handleProcessTransaction('card');
 
-      console.log('Saving sale data:', saleData);
-
-      // Save to Firebase
-      const salesRef = collection(db, 'sales');
-      const docRef = await addDoc(salesRef, saleData);
-
-      if (!docRef.id) {
-        throw new Error('Failed to save sale to database');
-      }
-
-      // Log the transaction
-      const logData = {
-        action: 'payment_completed',
-        stationId: currentStationId,
-        saleId: docRef.id,
-        timestamp: serverTimestamp(),
-        paymentMethod: 'card',
-        total: totalAmount / 100
-      };
-
-      console.log('Creating transaction log:', logData);
-      await addDoc(collection(db, 'self-checkout-logs'), logData);
-
-      // Update inventory first
-      const updatePromises = cart.map(item => {
-        const productRef = doc(db, 'products', item.id);
-        return updateDoc(productRef, {
-          stock: increment(-(item.quantity))
-        });
-      });
-
-      await Promise.all(updatePromises);
-
-      // Reset all states
-      setCart([]);
-      setDiscountAmount(0);
-      setCustomerDetails(null);
-      setShowCustomerForm(true);
+      // Reset states
       setShowCardForm(false);
       setPaymentClientSecret(null);
-
-      // Refresh products by refetching from Firebase
-      const productsRef = collection(db, 'products');
-      const productsSnapshot = await getDocs(productsRef);
-      const productsData = productsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setProducts(productsData);
       
-      // Reset search and category
-      setSearchTerm('');
-      setSelectedCategory('all');
-
-      toast.success('Payment successful!');
-
+      // Reset cart and product states
+      setCart([]);
+      setProducts(prev => {
+        const updated = { ...prev };
+        cart.forEach(item => {
+          if (updated[item.id]) {
+            updated[item.id] = { ...updated[item.id], inCart: false };
+          }
+        });
+        return updated;
+      });
+      
+      toast.success('Payment successful!', {
+        onClose: () => {
+          setSearchTerm('');
+          setSelectedCategory('all');
+        }
+      });
     } catch (error) {
       console.error('Error saving sale:', error);
       toast.error('Payment successful but failed to save sale');
@@ -415,6 +398,53 @@ export default function SelfCheckoutMode() {
     setSelectedPaymentMethod(method);
     if (method === 'card') {
       handleStripePayment();
+    }
+  };
+
+  const calculateTotal = () => {
+    const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+    const tax = (subtotal - discountAmount) * 0.1;
+    const total = subtotal - discountAmount + tax;
+    return { subtotal, tax, total };
+  };
+
+  const handleProcessTransaction = async (paymentMethod) => {
+    try {
+      setProcessing(true);
+      const total = calculateTotal();
+      
+      // Create transaction record
+      const transaction = {
+        items: cart,
+        subtotal: total.subtotal,
+        tax: total.tax,
+        total: total.total,
+        discountAmount,
+        paymentMethod,
+        timestamp: new Date(),
+        status: 'completed',
+        stationId
+      };
+
+      // Save transaction to Firestore
+      await addDoc(collection(db, 'self-checkout-logs'), {
+        action: 'complete_transaction',
+        ...transaction,
+        timestamp: new Date()
+      });
+
+      // Reset cart and states
+      setCart([]);
+      setDiscountAmount(0);
+      setDiscountCode('');
+      setShowDiscountModal(false);
+      setProcessing(false);
+
+      toast.success('Transaction completed successfully');
+    } catch (error) {
+      console.error('Error processing transaction:', error);
+      toast.error('Failed to process transaction');
+      setProcessing(false);
     }
   };
 
@@ -820,4 +850,6 @@ export default function SelfCheckoutMode() {
       </motion.button>
     </div>
   );
-} 
+};
+
+export default SelfCheckoutMode; 

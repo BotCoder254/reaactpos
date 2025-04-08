@@ -341,7 +341,7 @@ export default function POS() {
     
     // Ensure proper image structure when adding to cart
     const formattedProduct = {
-      ...product,
+        ...product,
       images: Array.isArray(product.images) 
         ? product.images.map(img => {
             if (!img) return null;
@@ -448,6 +448,47 @@ export default function POS() {
     }
   };
 
+  const handleProcessTransaction = async (paymentMethod) => {
+    try {
+      setProcessing(true);
+      const totals = calculateTotal();
+      
+      const transaction = {
+        items: cart,
+        subtotal: totals.subtotal,
+        discount: totals.discount,
+        tax: totals.tax,
+        total: totals.total,
+        customerId: selectedCustomer?.id || null,
+        cashierId: currentUser.uid,
+        paymentMethod,
+        timestamp: new Date(),
+        status: 'completed'
+      };
+
+      // Save transaction to Firestore
+      await addDoc(collection(db, 'transactions'), transaction);
+      
+      // Update inventory
+      await updateInventoryAfterSale(cart);
+      
+      // Reset states
+      setCart([]);
+      setDiscountAmount(0);
+      setSelectedCustomer(null);
+      setShowCardForm(false);
+      
+      toast.success('Transaction completed successfully!');
+      return transaction;
+    } catch (error) {
+      console.error('Error processing transaction:', error);
+      toast.error('Failed to process transaction');
+      throw error;
+    } finally {
+      setProcessing(false);
+    }
+  };
+
   const handlePaymentComplete = async (cashReceived, change) => {
     try {
       setLoading(true);
@@ -470,8 +511,17 @@ export default function POS() {
       // Update inventory
       await updateInventoryAfterSale(cart);
 
-      // Reset cart
-      resetCart();
+      // Reset cart and product states
+      setCart([]);
+      setProducts(prev => {
+        const updated = { ...prev };
+        cart.forEach(item => {
+          if (updated[item.id]) {
+            updated[item.id] = { ...updated[item.id], inCart: false };
+          }
+        });
+        return updated;
+      });
 
       toast.success('Sale completed successfully');
       return savedSale;
@@ -573,77 +623,82 @@ export default function POS() {
     setLoyaltyDiscount(amount);
   };
 
-  const renderProduct = (product) => (
-    <motion.div
-      key={product.id}
-      className={`bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow relative ${
-        products[product.id]?.inCart ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-      }`}
-      onClick={() => !products[product.id]?.inCart && addToCart(product)}
-      whileHover={{ scale: !products[product.id]?.inCart ? 1.02 : 1 }}
-      whileTap={{ scale: !products[product.id]?.inCart ? 0.98 : 1 }}
-    >
-      <div className="relative">
-        {product.images && product.images.length > 0 ? (
-          <img
-            src={product.images[0].url}
-            alt={product.name}
-            className="w-full h-32 object-cover rounded-md mb-2"
-            onError={(e) => {
-              e.target.onerror = null;
-              e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
-              e.target.className = "w-full h-32 object-contain rounded-md mb-2 bg-gray-100";
-            }}
-          />
-        ) : (
-          <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded-md mb-2">
-            <FiImage className="w-8 h-8 text-gray-400" />
-          </div>
-        )}
-        {product.stock <= 10 && (
-          <div className="absolute top-2 right-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
-            Low Stock
-          </div>
-        )}
-        {products[product.id]?.inCart && (
-          <div className="absolute inset-0 bg-gray-900 bg-opacity-50 rounded-md flex items-center justify-center">
-            <span className="text-white text-sm font-medium">In Cart</span>
-          </div>
-        )}
-        {product.images?.[0]?.photographer && (
-          <div className="absolute bottom-2 left-2">
-            <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full">
-              Photo by {product.images[0].photographer}
-            </span>
+  const renderProduct = (product) => {
+    const isOnSale = product.price < (originalPrices[product.id] || product.price);
+    const inCart = cart.some(item => item.id === product.id);
+    
+    return (
+      <motion.div
+        key={product.id}
+        whileHover={{ scale: !inCart ? 1.02 : 1 }}
+        whileTap={{ scale: !inCart ? 0.98 : 1 }}
+        className={`bg-white p-4 rounded-lg shadow-sm hover:shadow-md transition-shadow relative ${
+          inCart ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+        }`}
+        onClick={() => !inCart && addToCart(product)}
+      >
+        <div className="relative">
+          {product.images && product.images.length > 0 ? (
+            <img
+              src={product.images[0].url}
+              alt={product.name}
+              className="w-full h-32 object-cover rounded-md mb-2"
+              onError={(e) => {
+                e.target.onerror = null;
+                e.target.src = 'https://via.placeholder.com/400x300?text=No+Image';
+                e.target.className = "w-full h-32 object-contain rounded-md mb-2 bg-gray-100";
+              }}
+            />
+          ) : (
+            <div className="w-full h-32 bg-gray-100 flex items-center justify-center rounded-md mb-2">
+              <FiImage className="w-8 h-8 text-gray-400" />
+            </div>
+          )}
+          {product.stock <= 10 && (
+            <div className="absolute top-2 right-2 px-2 py-1 bg-red-500 text-white text-xs rounded-full">
+              Low Stock
+            </div>
+          )}
+          {inCart && (
+            <div className="absolute inset-0 bg-gray-900 bg-opacity-50 rounded-md flex items-center justify-center">
+              <span className="text-white text-sm font-medium">In Cart</span>
+            </div>
+          )}
+          {product.images?.[0]?.photographer && (
+            <div className="absolute bottom-2 left-2">
+              <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full">
+                Photo by {product.images[0].photographer}
+              </span>
+            </div>
+          )}
         </div>
-        )}
-      </div>
-      <h3 className="font-medium text-gray-900 truncate">{product.name}</h3>
-      <p className="text-sm text-gray-500 truncate">{product.description}</p>
-      <div className="mt-1">
-        {product.price !== originalPrices[product.id] ? (
-          <div className="space-y-1">
-            <span className="text-gray-500 line-through text-sm">
-              ${(originalPrices[product.id] || 0).toFixed(2)}
-            </span>
-            <span className="text-primary-600 font-semibold block">
+        <h3 className="font-medium text-gray-900 truncate">{product.name}</h3>
+        <p className="text-sm text-gray-500 truncate">{product.description}</p>
+        <div className="mt-1">
+          {product.price !== originalPrices[product.id] ? (
+            <div className="space-y-1">
+              <span className="text-gray-500 line-through text-sm">
+                ${(originalPrices[product.id] || 0).toFixed(2)}
+              </span>
+              <span className="text-primary-600 font-semibold">
+                ${(product.price || 0).toFixed(2)}
+              </span>
+              <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Special Price
+              </span>
+            </div>
+          ) : (
+            <span className="text-gray-900 font-semibold">
               ${(product.price || 0).toFixed(2)}
             </span>
-            <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
-              Special Price
-            </span>
-          </div>
-        ) : (
-          <span className="text-gray-900 font-semibold">
-            ${(product.price || 0).toFixed(2)}
-          </span>
-        )}
-      </div>
-      <div className="mt-1 text-sm text-gray-500">
-        Stock: {product.stock || 0}
-      </div>
-    </motion.div>
-  );
+          )}
+        </div>
+        <div className="mt-1 text-sm text-gray-500">
+          Stock: {product.stock || 0}
+        </div>
+      </motion.div>
+    );
+  };
 
   const handleProductSearch = (term) => {
     setSearchTerm(term);
@@ -743,28 +798,6 @@ export default function POS() {
     );
   };
 
-  const handleProcessTransaction = async () => {
-    try {
-      const totals = calculateTotal();
-      const transaction = {
-        items: cart,
-        subtotal: totals.subtotal,
-        discount: totals.discount,
-        tax: totals.tax,
-        total: totals.total,
-        customerId: selectedCustomer?.id,
-        cashierId: currentUser.uid,
-        timestamp: new Date()
-      };
-      
-      setCurrentTransaction(transaction);
-      return transaction;
-    } catch (error) {
-      console.error('Error processing transaction:', error);
-      toast.error('Failed to process transaction');
-    }
-  };
-
   const handleStripePayment = async () => {
     try {
       setStripeLoading(true);
@@ -814,73 +847,28 @@ export default function POS() {
       const total = calculateTotal();
       const totalAmount = Math.round(total.total * 100);
 
-      // Create sale record
-      const saleData = {
-        items: cart.map(item => ({
-          id: item.id,
-          name: item.name,
-          price: item.price,
-          quantity: item.quantity,
-          subtotal: item.price * item.quantity
-        })),
-        subtotal: total.subtotal,
-        tax: total.tax,
-        discount: discountAmount,
-        total: totalAmount / 100,
-        paymentMethod: 'card',
-        customerId: selectedCustomer?.id || null,
-        cashierId: currentUser?.uid || null,
-        timestamp: new Date(),
-        status: 'completed'
-      };
+      await handleProcessTransaction('card');
 
-      console.log('Saving sale data:', saleData);
-
-      // Save to Firebase
-      const salesRef = collection(db, 'sales');
-      const docRef = await addDoc(salesRef, saleData);
-
-      if (!docRef.id) {
-        throw new Error('Failed to save sale to database');
-      }
-
-      // Update inventory first
-      const updatePromises = cart.map(item => {
-        const productRef = doc(db, 'products', item.id);
-        return updateDoc(productRef, {
-          stock: increment(-(item.quantity))
-        });
-      });
-
-      await Promise.all(updatePromises);
-
-      // Update customer loyalty points if applicable
-      if (selectedCustomer && loyaltyProgram) {
-        await addPoints(selectedCustomer.id, totalAmount / 100);
-      }
-
-      // Reset all states
-      setCart([]);
-      setDiscountAmount(0);
-      setTaxAmount(0);
-      setSelectedCustomer(null);
+      // Reset states
       setShowCardForm(false);
       setPaymentClientSecret(null);
       
-      // Refresh products by refetching categories and products
-      const productsRef = collection(db, 'products');
-      const productsSnapshot = await getDocs(productsRef);
-      const productsData = productsSnapshot.docs.map(doc => ({
-          id: doc.id,
-        ...doc.data()
-      }));
-      setProducts(productsData);
+      // Reset cart and product states
+      setCart([]);
+      setProducts(prev => {
+        const updated = { ...prev };
+        cart.forEach(item => {
+          if (updated[item.id]) {
+            updated[item.id] = { ...updated[item.id], inCart: false };
+          }
+        });
+        return updated;
+      });
       
       toast.success('Payment successful!', {
         onClose: () => {
-          // Reset search and filters
-      setSearchTerm('');
-      setSelectedCategory('all');
+          setSearchTerm('');
+          setSelectedCategory('all');
         }
       });
 
