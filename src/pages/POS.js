@@ -40,6 +40,7 @@ import { formatCurrency, formatDate, formatInvoiceNumber } from '../utils/format
 import { sendDigitalReceipt } from '../utils/digitalReceiptQueries';
 import { useInvoiceCustomization } from '../contexts/InvoiceCustomizationContext';
 import { getStripeConfig, createPaymentIntent } from '../utils/stripeUtils';
+import StripeCardForm from '../components/payments/StripeCardForm';
 
 const TAX_RATE = 0.1; // 10% tax rate
 
@@ -106,6 +107,8 @@ export default function POS() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState(null);
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [paymentClientSecret, setPaymentClientSecret] = useState(null);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -611,7 +614,7 @@ export default function POS() {
             <span className="text-xs text-white bg-black bg-opacity-50 px-2 py-1 rounded-full">
               Photo by {product.images[0].photographer}
             </span>
-          </div>
+        </div>
         )}
       </div>
       <h3 className="font-medium text-gray-900 truncate">{product.name}</h3>
@@ -790,6 +793,26 @@ export default function POS() {
         throw new Error('Invalid payment intent response');
       }
 
+      // Store payment intent data and show card form
+      setPaymentClientSecret(stripeData.clientSecret);
+      setShowCardForm(true);
+      setStripeLoading(false);
+      setProcessing(false);
+
+    } catch (error) {
+      console.error('Payment failed:', error);
+      setStripeError(error.message);
+      toast.error(`Payment failed: ${error.message}`);
+      setStripeLoading(false);
+      setProcessing(false);
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
+    try {
+      const total = calculateTotal();
+      const totalAmount = Math.round(total.total * 100);
+
       // Create sale record
       const saleData = {
         items: cart.map(item => ({
@@ -804,7 +827,6 @@ export default function POS() {
         discount: discountAmount,
         total: totalAmount / 100,
         paymentMethod: 'card',
-        paymentIntentId: stripeData.paymentIntentId,
         customerId: selectedCustomer?.id || null,
         cashierId: currentUser?.uid || null,
         timestamp: new Date(),
@@ -826,6 +848,8 @@ export default function POS() {
       setDiscountAmount(0);
       setTaxAmount(0);
       setSelectedCustomer(null);
+      setShowCardForm(false);
+      setPaymentClientSecret(null);
       
       toast.success('Payment successful!');
       
@@ -843,13 +867,16 @@ export default function POS() {
       }
 
     } catch (error) {
-      console.error('Payment failed:', error);
-      setStripeError(error.message);
-      toast.error(`Payment failed: ${error.message}`);
-    } finally {
-      setStripeLoading(false);
-      setProcessing(false);
+      console.error('Error saving sale:', error);
+      toast.error('Payment successful but failed to save sale');
     }
+  };
+
+  const handlePaymentCancel = () => {
+    setShowCardForm(false);
+    setPaymentClientSecret(null);
+    setStripeLoading(false);
+    setProcessing(false);
   };
 
   if (loading) {
@@ -1225,6 +1252,15 @@ export default function POS() {
       />
 
       <AlternativesModal />
+
+      {showCardForm && paymentClientSecret && (
+        <StripeCardForm
+          amount={Math.round(calculateTotal().total * 100)}
+          clientSecret={paymentClientSecret}
+          onSuccess={handlePaymentSuccess}
+          onCancel={handlePaymentCancel}
+        />
+      )}
 
       {/* Update Transaction Verification */}
       <TransactionVerification 

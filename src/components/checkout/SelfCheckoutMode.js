@@ -9,6 +9,7 @@ import { toast } from 'react-hot-toast';
 import { getActiveDiscounts, calculateDiscount } from '../../utils/discountQueries';
 import { getActiveDynamicPricingRules, calculateDynamicPrice } from '../../utils/dynamicPricingQueries';
 import { getStripeConfig, createPaymentIntent } from '../../utils/stripeUtils';
+import StripeCardForm from '../payments/StripeCardForm';
 
 export default function SelfCheckoutMode() {
   const [cart, setCart] = useState([]);
@@ -34,6 +35,8 @@ export default function SelfCheckoutMode() {
   const [originalPrices, setOriginalPrices] = useState({});
   const [stripeLoading, setStripeLoading] = useState(false);
   const [stripeError, setStripeError] = useState(null);
+  const [showCardForm, setShowCardForm] = useState(false);
+  const [paymentClientSecret, setPaymentClientSecret] = useState(null);
 
   useEffect(() => {
     const loadProducts = async () => {
@@ -300,6 +303,25 @@ export default function SelfCheckoutMode() {
         throw new Error('Invalid payment intent response');
       }
 
+      // Store payment intent data and show card form
+      setPaymentClientSecret(stripeData.clientSecret);
+      setShowCardForm(true);
+      setStripeLoading(false);
+      setProcessing(false);
+
+    } catch (error) {
+      console.error('Payment failed:', error);
+      setStripeError(error.message);
+      toast.error(`Payment failed: ${error.message}`);
+      setStripeLoading(false);
+      setProcessing(false);
+    }
+  };
+
+  const handlePaymentSuccess = async () => {
+    try {
+      const totalAmount = Math.round((subtotal - discountAmount) * 100);
+
       // Create sale record
       const saleData = {
         items: cart.map(item => ({
@@ -313,7 +335,6 @@ export default function SelfCheckoutMode() {
         discount: discountAmount,
         total: totalAmount / 100,
         paymentMethod: 'card',
-        paymentIntentId: stripeData.paymentIntentId,
         customerId: customerDetails?.id || null,
         stationId: currentStationId,
         timestamp: serverTimestamp(),
@@ -330,21 +351,17 @@ export default function SelfCheckoutMode() {
         throw new Error('Failed to save sale to database');
       }
 
-      console.log('Sale saved successfully:', docRef.id);
-
       // Log the transaction
       const logData = {
         action: 'payment_completed',
         stationId: currentStationId,
         saleId: docRef.id,
-        paymentIntentId: stripeData.paymentIntentId,
         timestamp: serverTimestamp(),
         paymentMethod: 'card',
         total: totalAmount / 100
       };
 
       console.log('Creating transaction log:', logData);
-
       await addDoc(collection(db, 'self-checkout-logs'), logData);
 
       // Clear cart and reset state
@@ -352,12 +369,13 @@ export default function SelfCheckoutMode() {
       setDiscountAmount(0);
       setCustomerDetails(null);
       setShowCustomerForm(true);
+      setShowCardForm(false);
+      setPaymentClientSecret(null);
 
       toast.success('Payment successful!');
 
       // Update inventory
       console.log('Updating inventory for items:', cart);
-
       for (const item of cart) {
         const productRef = doc(db, 'products', item.id);
         await updateDoc(productRef, {
@@ -366,13 +384,16 @@ export default function SelfCheckoutMode() {
       }
 
     } catch (error) {
-      console.error('Payment failed:', error);
-      setStripeError(error.message);
-      toast.error(`Payment failed: ${error.message}`);
-    } finally {
-      setStripeLoading(false);
-      setProcessing(false);
+      console.error('Error saving sale:', error);
+      toast.error('Payment successful but failed to save sale');
     }
+  };
+
+  const handlePaymentCancel = () => {
+    setShowCardForm(false);
+    setPaymentClientSecret(null);
+    setStripeLoading(false);
+    setProcessing(false);
   };
 
   const handlePayment = (method) => {
@@ -759,6 +780,17 @@ export default function SelfCheckoutMode() {
 
       <AnimatePresence>
         {showLoginModal && <LoginModal />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showCardForm && paymentClientSecret && (
+          <StripeCardForm
+            amount={Math.round((subtotal - discountAmount) * 100)}
+            clientSecret={paymentClientSecret}
+            onSuccess={handlePaymentSuccess}
+            onCancel={handlePaymentCancel}
+          />
+        )}
       </AnimatePresence>
 
       <motion.button
