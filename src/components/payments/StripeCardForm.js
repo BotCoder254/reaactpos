@@ -9,6 +9,11 @@ import {
 import { FiX, FiCreditCard } from 'react-icons/fi';
 import { motion } from 'framer-motion';
 
+// Get Stripe API URL based on environment
+const STRIPE_API_URL = process.env.NODE_ENV === 'production'
+  ? 'https://reaactpos-55uo.onrender.com'
+  : 'http://localhost:4242';
+
 const PaymentForm = ({ clientSecret, amount, onSuccess, onCancel }) => {
   const stripe = useStripe();
   const elements = useElements();
@@ -87,7 +92,7 @@ const StripeCardForm = ({ amount, clientSecret, onSuccess, onCancel }) => {
 
   useEffect(() => {
     const loadStripeKey = async () => {
-      const response = await fetch('http://localhost:4242/config');
+      const response = await fetch(`${STRIPE_API_URL}/config`);
       const { publishableKey } = await response.json();
       setStripePromise(loadStripe(publishableKey));
     };
