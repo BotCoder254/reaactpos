@@ -64,7 +64,7 @@ export default function Sales() {
             return {
               id: doc.id,
               ...data,
-              timestamp: data.timestamp?.toDate().toLocaleString() || 'N/A',
+              timestamp: data.timestamp?.toDate() || new Date(),
               total,
               subtotal,
               tax,
@@ -312,7 +312,7 @@ export default function Sales() {
                     {sale.customerName || 'Walk-in Customer'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0)}
+                    ${parseFloat(sale.total || 0).toFixed(2)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${

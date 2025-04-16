@@ -25,10 +25,14 @@ export async function createSale(saleData) {
       })) : [],
       status: 'completed',
       createdAt: new Date(),
+      timestamp: new Date()
     };
 
     const docRef = await addDoc(collection(db, 'sales'), formattedSaleData);
-    return docRef.id;
+    return {
+      id: docRef.id,
+      ...formattedSaleData
+    };
   } catch (error) {
     console.error('Error creating sale:', error);
     throw error;
@@ -86,6 +90,7 @@ export async function getSales(dateRange = 'today', cashierId = 'all', paymentMe
         total: typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0,
         subtotal: typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0,
         tax: typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0,
+        timestamp: data.timestamp?.toDate() || new Date(),
         items: Array.isArray(data.items) ? data.items.map(item => ({
           ...item,
           price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
@@ -211,24 +216,26 @@ export const getSalesAnalytics = async (period = 'month') => {
         sale.items.forEach(item => {
           const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
           const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
-          if (!acc[item.category]) {
-            acc[item.category] = 0;
+          const category = item.category || 'Uncategorized';
+          
+          if (!acc[category]) {
+            acc[category] = 0;
           }
-          acc[item.category] += price * quantity;
+          acc[category] += price * quantity;
         });
       }
       return acc;
     }, {});
 
-    // Convert to arrays for charts
+    // Convert to arrays for charts with proper number handling
     const dailyData = Object.entries(dailySales).map(([date, amount]) => ({
       date,
-      amount: parseFloat(amount) || 0
+      amount: typeof amount === 'number' ? amount : parseFloat(amount) || 0
     }));
 
     const categoryData = Object.entries(salesByCategory).map(([category, amount]) => ({
       category,
-      amount: parseFloat(amount) || 0
+      amount: typeof amount === 'number' ? amount : parseFloat(amount) || 0
     }));
 
     return {
