@@ -12,11 +12,22 @@ import Papa from 'papaparse';
 
 export async function createSale(saleData) {
   try {
-    const docRef = await addDoc(collection(db, 'sales'), {
+    // Ensure numerical values are properly formatted
+    const formattedSaleData = {
       ...saleData,
+      total: typeof saleData.total === 'number' ? saleData.total : parseFloat(saleData.total) || 0,
+      subtotal: typeof saleData.subtotal === 'number' ? saleData.subtotal : parseFloat(saleData.subtotal) || 0,
+      tax: typeof saleData.tax === 'number' ? saleData.tax : parseFloat(saleData.tax) || 0,
+      items: Array.isArray(saleData.items) ? saleData.items.map(item => ({
+        ...item,
+        price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+        quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+      })) : [],
       status: 'completed',
       createdAt: new Date(),
-    });
+    };
+
+    const docRef = await addDoc(collection(db, 'sales'), formattedSaleData);
     return docRef.id;
   } catch (error) {
     console.error('Error creating sale:', error);
@@ -67,10 +78,21 @@ export async function getSales(dateRange = 'today', cashierId = 'all', paymentMe
     );
 
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    }));
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        total: typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0,
+        subtotal: typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0,
+        tax: typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0,
+        items: Array.isArray(data.items) ? data.items.map(item => ({
+          ...item,
+          price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+          quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+        })) : []
+      };
+    });
   } catch (error) {
     console.error('Error getting sales:', error);
     throw error;
@@ -81,12 +103,12 @@ export async function exportSales(sales) {
   try {
     const csvData = sales.map(sale => ({
       date: new Date(sale.timestamp).toLocaleString(),
-      items: sale.items.length,
-      subtotal: sale.subtotal,
-      tax: sale.tax,
-      total: sale.total,
-      paymentMethod: sale.paymentMethod,
-      cashier: sale.cashierName,
+      items: Array.isArray(sale.items) ? sale.items.length : 0,
+      subtotal: typeof sale.subtotal === 'number' ? sale.subtotal : parseFloat(sale.subtotal) || 0,
+      tax: typeof sale.tax === 'number' ? sale.tax : parseFloat(sale.tax) || 0,
+      total: typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0,
+      paymentMethod: sale.paymentMethod || 'N/A',
+      cashier: sale.cashierName || 'N/A',
     }));
 
     const csv = Papa.unparse(csvData);
@@ -103,8 +125,21 @@ export async function exportSales(sales) {
 
 export async function emailReceipt(saleData, email) {
   try {
+    // Ensure numerical values are properly formatted
+    const formattedSaleData = {
+      ...saleData,
+      total: parseFloat(saleData.total) || 0,
+      subtotal: parseFloat(saleData.subtotal) || 0,
+      tax: parseFloat(saleData.tax) || 0,
+      items: Array.isArray(saleData.items) ? saleData.items.map(item => ({
+        ...item,
+        price: parseFloat(item.price) || 0,
+        quantity: parseInt(item.quantity) || 0
+      })) : []
+    };
+    
     // This would typically call a Firebase Cloud Function
-    console.log('Emailing receipt to:', email, saleData);
+    console.log('Emailing receipt to:', email, formattedSaleData);
     return true;
   } catch (error) {
     console.error('Error emailing receipt:', error);
@@ -140,44 +175,60 @@ export const getSalesAnalytics = async (period = 'month') => {
     );
 
     const querySnapshot = await getDocs(q);
-    const sales = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const sales = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        ...data,
+        total: typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0,
+        subtotal: typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0,
+        tax: typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0,
+        items: Array.isArray(data.items) ? data.items.map(item => ({
+          ...item,
+          price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+          quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+        })) : []
+      };
+    });
 
-    // Calculate total sales
-    const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
+    // Calculate total sales with proper number handling
+    const totalSales = sales.reduce((sum, sale) => {
+      const saleTotal = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+      return sum + saleTotal;
+    }, 0);
 
-    // Calculate daily sales
+    // Calculate daily sales with proper number handling
     const dailySales = sales.reduce((acc, sale) => {
       const date = sale.timestamp.toDate().toISOString().split('T')[0];
-      if (!acc[date]) {
-        acc[date] = 0;
-      }
-      acc[date] += sale.total;
+      const saleTotal = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+      acc[date] = (acc[date] || 0) + saleTotal;
       return acc;
     }, {});
 
-    // Calculate sales by category
+    // Calculate sales by category with proper number handling
     const salesByCategory = sales.reduce((acc, sale) => {
-      sale.items.forEach(item => {
-        if (!acc[item.category]) {
-          acc[item.category] = 0;
-        }
-        acc[item.category] += item.price * item.quantity;
-      });
+      if (Array.isArray(sale.items)) {
+        sale.items.forEach(item => {
+          const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+          const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+          if (!acc[item.category]) {
+            acc[item.category] = 0;
+          }
+          acc[item.category] += price * quantity;
+        });
+      }
       return acc;
     }, {});
 
     // Convert to arrays for charts
     const dailyData = Object.entries(dailySales).map(([date, amount]) => ({
       date,
-      amount
+      amount: parseFloat(amount) || 0
     }));
 
     const categoryData = Object.entries(salesByCategory).map(([category, amount]) => ({
       category,
-      amount
+      amount: parseFloat(amount) || 0
     }));
 
     return {

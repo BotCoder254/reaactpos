@@ -221,7 +221,10 @@ export default function Analytics() {
       );
       return {
         date,
-        revenue: daySales.reduce((sum, sale) => sum + (sale.total || 0), 0),
+        revenue: daySales.reduce((sum, sale) => {
+          const total = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+          return sum + total;
+        }, 0),
         orders: daySales.length
       };
     });
@@ -335,7 +338,7 @@ export default function Analytics() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Total Sales</h3>
                 <p className="text-2xl font-bold text-primary-600">
-                  ${analyticsData.totalSales.toFixed(2)}
+                  ${analyticsData.totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
             </div>

@@ -54,11 +54,27 @@ export default function Sales() {
         
         const salesSnapshot = await getDocs(salesQuery);
         const salesList = salesSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate().toLocaleString() || 'N/A'
-          }))
+          .map(doc => {
+            const data = doc.data();
+            // Ensure proper number handling for all numerical values
+            const total = typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0;
+            const subtotal = typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0;
+            const tax = typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0;
+            
+            return {
+              id: doc.id,
+              ...data,
+              timestamp: data.timestamp?.toDate().toLocaleString() || 'N/A',
+              total,
+              subtotal,
+              tax,
+              items: Array.isArray(data.items) ? data.items.map(item => ({
+                ...item,
+                price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+                quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+              })) : []
+            };
+          })
           .filter(sale => sale.status === 'completed');
 
         setSales(salesList);
@@ -296,7 +312,7 @@ export default function Sales() {
                     {sale.customerName || 'Walk-in Customer'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {formatCurrency(sale.total)}
+                    {formatCurrency(typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
