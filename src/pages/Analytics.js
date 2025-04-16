@@ -121,7 +121,7 @@ export default function Analytics() {
       }));
 
       // Process real-time data
-      const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
+      const totalSales = sales.reduce((sum, sale) => sum + (parseFloat(sale.total) || 0), 0);
       const totalItems = sales.reduce((sum, sale) => sum + sale.items.length, 0);
       const uniqueCustomers = new Set(sales.map(sale => sale.customerId)).size;
 
@@ -135,7 +135,7 @@ export default function Analytics() {
       setRealtimeData(sales);
       setAnalyticsData(prev => ({
         ...prev,
-        totalSales,
+        totalSales: totalSales || 0,
         totalItems,
         totalCustomers: uniqueCustomers,
         hourlyData,
