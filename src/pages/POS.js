@@ -97,7 +97,7 @@ export default function POS() {
   const [currentPaymentMethod, setCurrentPaymentMethod] = useState(null);
   const { loyaltyProgram, addPoints } = useLoyalty();
   const [loyaltyDiscount, setLoyaltyDiscount] = useState(0);
-  const { checkLowStock, findAlternatives, updateInventory } = useInventory();
+  const { checkLowStock, findAlternatives, updateStock } = useInventory();
   const [alternativeProducts, setAlternativeProducts] = useState([]);
   const [showAlternatives, setShowAlternatives] = useState(false);
   const [currentTransaction, setCurrentTransaction] = useState(null);
@@ -425,7 +425,7 @@ export default function POS() {
   const updateInventoryAfterSale = async (items) => {
     try {
       for (const item of items) {
-        await updateInventory(item.id, -item.quantity);
+        await updateStock(item.id, item.quantity, 'remove');
       }
     } catch (error) {
       console.error('Error updating inventory:', error);
