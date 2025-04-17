@@ -21,11 +21,15 @@ export async function createSale(saleData) {
       items: Array.isArray(saleData.items) ? saleData.items.map(item => ({
         ...item,
         price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
-        quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+        quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0,
+        total: typeof item.price === 'number' ? 
+          item.price * (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0) :
+          parseFloat(item.price) * (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0) || 0
       })) : [],
       status: 'completed',
       createdAt: new Date(),
-      timestamp: new Date()
+      timestamp: new Date(),
+      amount: typeof saleData.total === 'number' ? saleData.total : parseFloat(saleData.total) || 0
     };
 
     const docRef = await addDoc(collection(db, 'sales'), formattedSaleData);
@@ -84,17 +88,31 @@ export async function getSales(dateRange = 'today', cashierId = 'all', paymentMe
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
+      const total = typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0;
+      const subtotal = typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0;
+      const tax = typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0;
+
       return {
         id: doc.id,
         ...data,
-        total: typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0,
-        subtotal: typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0,
-        tax: typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0,
+        total,
+        subtotal,
+        tax,
+        amount: total,
         timestamp: data.timestamp?.toDate() || new Date(),
+        formattedTotal: new Intl.NumberFormat('en-US', {
+          style: 'currency',
+          currency: 'USD',
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        }).format(total),
         items: Array.isArray(data.items) ? data.items.map(item => ({
           ...item,
           price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
-          quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+          quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0,
+          total: typeof item.price === 'number' ? 
+            item.price * (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0) :
+            parseFloat(item.price) * (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0) || 0
         })) : []
       };
     });
