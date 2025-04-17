@@ -68,10 +68,15 @@ export default function Sales() {
               total,
               subtotal,
               tax,
+              amount: total,
+              formattedTotal: formatCurrency(total),
               items: Array.isArray(data.items) ? data.items.map(item => ({
                 ...item,
                 price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
-                quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+                quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0,
+                total: typeof item.price === 'number' ? 
+                  item.price * (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0) :
+                  parseFloat(item.price) * (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0) || 0
               })) : []
             };
           })
@@ -312,7 +317,7 @@ export default function Sales() {
                     {sale.customerName || 'Walk-in Customer'}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    ${parseFloat(sale.total || 0).toFixed(2)}
+                    {formatCurrency(sale.total)}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
