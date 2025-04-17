@@ -54,11 +54,32 @@ export default function Sales() {
         
         const salesSnapshot = await getDocs(salesQuery);
         const salesList = salesSnapshot.docs
-          .map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate().toLocaleString() || 'N/A'
-          }))
+          .map(doc => {
+            const data = doc.data();
+            // Ensure proper number handling for all numerical values
+            const total = typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0;
+            const subtotal = typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0;
+            const tax = typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0;
+            
+            return {
+              id: doc.id,
+              ...data,
+              timestamp: data.timestamp?.toDate() || new Date(),
+              total,
+              subtotal,
+              tax,
+              amount: total,
+              formattedTotal: formatCurrency(total),
+              items: Array.isArray(data.items) ? data.items.map(item => ({
+                ...item,
+                price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+                quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0,
+                total: typeof item.price === 'number' ? 
+                  item.price * (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0) :
+                  parseFloat(item.price) * (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0) || 0
+              })) : []
+            };
+          })
           .filter(sale => sale.status === 'completed');
 
         setSales(salesList);

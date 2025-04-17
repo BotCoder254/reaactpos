@@ -73,10 +73,16 @@ const SalesGoals = () => {
     );
   }
 
+
   const renderGoalSection = (period) => {
     const { target = 0, achieved = 0 } = goals[period] || {};
-    const progress = calculateProgress(achieved, target);
+    // const progress = calculateProgress(achieved, target);
 
+
+
+    const achievedValue = parseFloat(String(achieved)) || 0;
+  
+    const progress = calculateProgress(achievedValue, target);
     return (
       <div className="bg-white p-4 rounded-lg shadow-md mb-4">
         <div className="flex justify-between items-center mb-2">
@@ -112,7 +118,7 @@ const SalesGoals = () => {
         <div className="mb-2">
           <span className="text-gray-600">Target: ${target.toLocaleString()}</span>
           <span className="mx-2">|</span>
-          <span className="text-gray-600">Achieved: ${achieved.toLocaleString()}</span>
+          <span className="text-gray-600">Achieved:{achievedValue.toLocaleString()}</span>
         </div>
         <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
           <motion.div

@@ -43,25 +43,43 @@ export default function ProfitLossStatement() {
   };
 
   const processProfitLossData = (sales, expenses) => {
-    const totalRevenue = sales.totalSales || 0;
-    const totalExpenses = expenses.totalExpenses || 0;
+    // Calculate total revenue from sales data
+    const totalRevenue = sales?.dailySales?.reduce((sum, sale) => 
+      sum + (parseFloat(sale.amount) || 0), 0) || 0;
+
+    // Calculate total expenses
+    const totalExpenses = expenses?.dailyExpenses?.reduce((sum, expense) => 
+      sum + (parseFloat(expense.amount) || 0), 0) || 0;
+
+    // Calculate net profit and margin
     const netProfit = totalRevenue - totalExpenses;
     const profitMargin = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
 
-    // Combine daily data for trend analysis
-    const dailyData = sales.dailySales?.map(sale => {
-      const expense = expenses.dailyExpenses?.find(exp => exp.date === sale.date) || { amount: 0 };
+    // Process daily data for trend analysis
+    const dailyData = sales?.dailySales?.map(sale => {
+      const matchingExpense = expenses?.dailyExpenses?.find(exp => exp.date === sale.date) || { amount: 0 };
+      const dailyRevenue = parseFloat(sale.amount) || 0;
+      const dailyExpense = parseFloat(matchingExpense.amount) || 0;
+      const dailyProfit = dailyRevenue - dailyExpense;
+
       return {
         date: sale.date,
-        revenue: sale.amount,
-        expenses: expense.amount,
-        profit: sale.amount - expense.amount
+        revenue: dailyRevenue,
+        expenses: dailyExpense,
+        profit: dailyProfit
       };
     }) || [];
 
-    // Category breakdown
-    const expensesByCategory = expenses.expensesByCategory || [];
-    const salesByCategory = sales.salesByCategory || [];
+    // Process category data
+    const salesByCategory = (sales?.salesByCategory || []).map(category => ({
+      category: category.category,
+      amount: parseFloat(category.amount) || 0
+    }));
+
+    const expensesByCategory = (expenses?.expensesByCategory || []).map(category => ({
+      category: category.category,
+      amount: parseFloat(category.amount) || 0
+    }));
 
     return {
       summary: {
@@ -70,9 +88,9 @@ export default function ProfitLossStatement() {
         netProfit,
         profitMargin
       },
-      dailyData,
-      expensesByCategory,
-      salesByCategory
+      dailyData: dailyData.sort((a, b) => new Date(a.date) - new Date(b.date)),
+      salesByCategory,
+      expensesByCategory
     };
   };
 
@@ -80,6 +98,15 @@ export default function ProfitLossStatement() {
     return (
       <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  // Ensure data exists before rendering
+  if (!data || !data.summary) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-gray-500">No data available</p>
       </div>
     );
   }
@@ -107,7 +134,7 @@ export default function ProfitLossStatement() {
             <div>
               <p className="text-gray-500 text-sm">Total Revenue</p>
               <h3 className="text-2xl font-bold text-gray-900">
-                ${data.summary.totalRevenue.toFixed(2)}
+                ${Number(data.summary.totalRevenue).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
             <FiDollarSign className="h-8 w-8 text-green-500" />
@@ -119,7 +146,7 @@ export default function ProfitLossStatement() {
             <div>
               <p className="text-gray-500 text-sm">Total Expenses</p>
               <h3 className="text-2xl font-bold text-gray-900">
-                ${data.summary.totalExpenses.toFixed(2)}
+                ${Number(data.summary.totalExpenses).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
             <FiTrendingDown className="h-8 w-8 text-red-500" />
@@ -131,13 +158,13 @@ export default function ProfitLossStatement() {
             <div>
               <p className="text-gray-500 text-sm">Net Profit</p>
               <h3 className={`text-2xl font-bold ${
-                data.summary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
+                Number(data.summary.netProfit) >= 0 ? 'text-green-600' : 'text-red-600'
               }`}>
-                ${data.summary.netProfit.toFixed(2)}
+                ${Number(data.summary.netProfit).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </h3>
             </div>
             <FiTrendingUp className={`h-8 w-8 ${
-              data.summary.netProfit >= 0 ? 'text-green-500' : 'text-red-500'
+              Number(data.summary.netProfit) >= 0 ? 'text-green-500' : 'text-red-500'
             }`} />
           </div>
         </div>
@@ -147,13 +174,13 @@ export default function ProfitLossStatement() {
             <div>
               <p className="text-gray-500 text-sm">Profit Margin</p>
               <h3 className={`text-2xl font-bold ${
-                data.summary.profitMargin >= 0 ? 'text-green-600' : 'text-red-600'
+                Number(data.summary.profitMargin) >= 0 ? 'text-green-600' : 'text-red-600'
               }`}>
-                {data.summary.profitMargin.toFixed(1)}%
+                {Number(data.summary.profitMargin).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%
               </h3>
             </div>
             <FiTrendingUp className={`h-8 w-8 ${
-              data.summary.profitMargin >= 0 ? 'text-green-500' : 'text-red-500'
+              Number(data.summary.profitMargin) >= 0 ? 'text-green-500' : 'text-red-500'
             }`} />
           </div>
         </div>

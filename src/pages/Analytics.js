@@ -115,20 +115,38 @@ export default function Analytics() {
     );
 
     return onSnapshot(q, (snapshot) => {
-      const sales = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
+      const sales = snapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          total: typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0,
+          items: Array.isArray(data.items) ? data.items.map(item => ({
+            ...item,
+            price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+            quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+          })) : []
+        };
+      });
 
-      // Process real-time data
-      const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
-      const totalItems = sales.reduce((sum, sale) => sum + sale.items.length, 0);
+      // Process real-time data with proper number handling
+      const totalSales = sales.reduce((sum, sale) => {
+        const saleTotal = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+        return sum + saleTotal;
+      }, 0);
+
+      const totalItems = sales.reduce((sum, sale) => {
+        return sum + (Array.isArray(sale.items) ? sale.items.reduce((itemSum, item) => {
+          return itemSum + (typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0);
+        }, 0) : 0);
+      }, 0);
+
       const uniqueCustomers = new Set(sales.map(sale => sale.customerId)).size;
 
-      // Process hourly data
+      // Process hourly data with proper number handling
       const hourlyData = processHourlyData(sales);
 
-      // Process category data
+      // Process category data with proper number handling
       const categoryData = processCategoryData(sales);
 
       // Update real-time data
@@ -142,10 +160,11 @@ export default function Analytics() {
         categoryData
       }));
 
-      // Update sales trend
+      // Update sales trend with proper number handling
       const salesByDate = sales.reduce((acc, sale) => {
         const date = new Date(sale.timestamp.seconds * 1000).toLocaleDateString();
-        acc[date] = (acc[date] || 0) + sale.total;
+        const saleTotal = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+        acc[date] = (acc[date] || 0) + saleTotal;
         return acc;
       }, {});
 
@@ -153,7 +172,7 @@ export default function Analytics() {
         ...prev,
         salesTrend: Object.entries(salesByDate).map(([date, total]) => ({
           date,
-          total
+          total: typeof total === 'number' ? total : parseFloat(total) || 0
         }))
       }));
     });
@@ -168,7 +187,8 @@ export default function Analytics() {
 
     sales.forEach(sale => {
       const hour = new Date(sale.timestamp.seconds * 1000).getHours();
-      hourlyStats[hour].sales += sale.total;
+      const saleTotal = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+      hourlyStats[hour].sales += saleTotal;
       hourlyStats[hour].transactions += 1;
     });
 
@@ -179,17 +199,22 @@ export default function Analytics() {
     const categories = {};
     
     sales.forEach(sale => {
-      sale.items.forEach(item => {
-        if (!categories[item.category]) {
-          categories[item.category] = {
-            name: item.category,
-            value: 0,
-            items: 0
-          };
-        }
-        categories[item.category].value += item.price * item.quantity;
-        categories[item.category].items += item.quantity;
-      });
+      if (Array.isArray(sale.items)) {
+        sale.items.forEach(item => {
+          const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+          const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+          
+          if (!categories[item.category]) {
+            categories[item.category] = {
+              name: item.category,
+              value: 0,
+              items: 0
+            };
+          }
+          categories[item.category].value += price * quantity;
+          categories[item.category].items += quantity;
+        });
+      }
     });
 
     return Object.values(categories);
@@ -221,7 +246,10 @@ export default function Analytics() {
       );
       return {
         date,
-        revenue: daySales.reduce((sum, sale) => sum + (sale.total || 0), 0),
+        revenue: daySales.reduce((sum, sale) => {
+          const total = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+          return sum + total;
+        }, 0),
         orders: daySales.length
       };
     });
@@ -335,7 +363,7 @@ export default function Analytics() {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Total Sales</h3>
                 <p className="text-2xl font-bold text-primary-600">
-                  ${analyticsData.totalSales.toFixed(2)}
+                  ${analyticsData.totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </p>
               </div>
             </div>

@@ -69,26 +69,32 @@ export async function getWeeklySales() {
 }
 
 // Get recent transactions
-export async function getRecentTransactions(limit = 5) {
+export async function getRecentTransactions(limitCount = 5) {
   const salesRef = collection(db, 'sales');
   const q = query(
     salesRef,
     orderBy('timestamp', 'desc'),
-    limit(limit)
+    limit(limitCount)
   );
 
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => {
     const data = doc.data();
+    // Ensure proper number handling for total
+    const total = typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0;
+    
     return {
       id: doc.id,
-      amount: data.total.toLocaleString('en-US', {
+      total: total,
+      amount: total.toLocaleString('en-US', {
         style: 'currency',
-        currency: 'USD'
+        currency: 'USD',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2
       }),
-      status: data.status,
+      status: data.status || 'completed',
       date: formatTimestamp(data.timestamp),
-      items: data.items.length
+      items: Array.isArray(data.items) ? data.items.length : 0
     };
   });
 }
@@ -121,7 +127,7 @@ export async function getDashboardStats() {
 
   // Get today's sales
   const todaySales = await getDailySales();
-  const totalSales = todaySales.reduce((sum, sale) => sum + sale.total, 0);
+  const totalSales = parseFloat(todaySales.reduce((sum, sale) => sum + sale.total, 0));
   
   // Get total transactions
   const salesRef = collection(db, 'sales');
