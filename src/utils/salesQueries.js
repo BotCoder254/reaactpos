@@ -12,11 +12,21 @@ import Papa from 'papaparse';
 
 export async function createSale(saleData) {
   try {
+    // Calculate total from items if not provided
+    let calculatedTotal = 0;
+    if (Array.isArray(saleData.items)) {
+      calculatedTotal = saleData.items.reduce((sum, item) => {
+        const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+        const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+        return sum + (price * quantity);
+      }, 0);
+    }
+
     // Ensure numerical values are properly formatted
     const formattedSaleData = {
       ...saleData,
-      total: typeof saleData.total === 'number' ? saleData.total : parseFloat(saleData.total) || 0,
-      subtotal: typeof saleData.subtotal === 'number' ? saleData.subtotal : parseFloat(saleData.subtotal) || 0,
+      total: typeof saleData.total === 'number' ? saleData.total : parseFloat(saleData.total) || calculatedTotal,
+      subtotal: typeof saleData.subtotal === 'number' ? saleData.subtotal : parseFloat(saleData.subtotal) || calculatedTotal,
       tax: typeof saleData.tax === 'number' ? saleData.tax : parseFloat(saleData.tax) || 0,
       items: Array.isArray(saleData.items) ? saleData.items.map(item => ({
         ...item,
@@ -29,7 +39,7 @@ export async function createSale(saleData) {
       status: 'completed',
       createdAt: new Date(),
       timestamp: new Date(),
-      amount: typeof saleData.total === 'number' ? saleData.total : parseFloat(saleData.total) || 0
+      amount: typeof saleData.total === 'number' ? saleData.total : parseFloat(saleData.total) || calculatedTotal
     };
 
     const docRef = await addDoc(collection(db, 'sales'), formattedSaleData);
@@ -88,24 +98,27 @@ export async function getSales(dateRange = 'today', cashierId = 'all', paymentMe
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => {
       const data = doc.data();
-      const total = typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0;
-      const subtotal = typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0;
-      const tax = typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0;
+      
+      // Calculate total from items if total is not present or invalid
+      let calculatedTotal = 0;
+      if (Array.isArray(data.items)) {
+        calculatedTotal = data.items.reduce((sum, item) => {
+          const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+          const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+          return sum + (price * quantity);
+        }, 0);
+      }
+
+      const total = typeof data.total === 'number' ? data.total : 
+                   (parseFloat(data.total) || calculatedTotal);
 
       return {
         id: doc.id,
         ...data,
         total,
-        subtotal,
-        tax,
-        amount: total,
+        subtotal: typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || total,
+        tax: typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0,
         timestamp: data.timestamp?.toDate() || new Date(),
-        formattedTotal: new Intl.NumberFormat('en-US', {
-          style: 'currency',
-          currency: 'USD',
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        }).format(total),
         items: Array.isArray(data.items) ? data.items.map(item => ({
           ...item,
           price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,

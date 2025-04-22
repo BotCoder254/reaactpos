@@ -44,7 +44,6 @@ export default function Sales() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        // Fetch sales with a simple orderBy query
         const salesCollection = collection(db, 'sales');
         const salesQuery = query(
           salesCollection,
@@ -56,20 +55,27 @@ export default function Sales() {
         const salesList = salesSnapshot.docs
           .map(doc => {
             const data = doc.data();
-            // Ensure proper number handling for all numerical values
-            const total = typeof data.total === 'number' ? data.total : parseFloat(data.total) || 0;
-            const subtotal = typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || 0;
-            const tax = typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0;
+            // Calculate total from items if total is not present or invalid
+            let calculatedTotal = 0;
+            if (Array.isArray(data.items)) {
+              calculatedTotal = data.items.reduce((sum, item) => {
+                const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+                const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+                return sum + (price * quantity);
+              }, 0);
+            }
+            
+            // Use the calculated total if the stored total is invalid
+            const total = typeof data.total === 'number' ? data.total : 
+                         (parseFloat(data.total) || calculatedTotal);
             
             return {
               id: doc.id,
               ...data,
               timestamp: data.timestamp?.toDate() || new Date(),
-              total,
-              subtotal,
-              tax,
-              amount: total,
-              formattedTotal: formatCurrency(total),
+              total: total,
+              subtotal: typeof data.subtotal === 'number' ? data.subtotal : parseFloat(data.subtotal) || total,
+              tax: typeof data.tax === 'number' ? data.tax : parseFloat(data.tax) || 0,
               items: Array.isArray(data.items) ? data.items.map(item => ({
                 ...item,
                 price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
@@ -311,7 +317,7 @@ export default function Sales() {
                     {sale.receiptNumber || sale.id.slice(0, 8).toUpperCase()}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    {formatDate(sale.timestamp)}
+                    {format(sale.timestamp, "MMMM d, yyyy 'at' hh:mm a")}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {sale.customerName || 'Walk-in Customer'}
