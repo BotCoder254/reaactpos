@@ -26,7 +26,19 @@ const SalesGoals = () => {
 
   const calculateProgress = (achieved, target) => {
     if (!target || target === 0) return 0;
-    return Math.min((achieved / target) * 100, 100);
+    const achievedNum = parseFloat(achieved) || 0;
+    const targetNum = parseFloat(target) || 0;
+    return Math.min((achievedNum / targetNum) * 100, 100);
+  };
+
+  const formatCurrency = (amount) => {
+    const value = parseFloat(amount) || 0;
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
   };
 
   const progressVariants = {
@@ -73,16 +85,12 @@ const SalesGoals = () => {
     );
   }
 
-
   const renderGoalSection = (period) => {
     const { target = 0, achieved = 0 } = goals[period] || {};
-    // const progress = calculateProgress(achieved, target);
+    const achievedValue = parseFloat(achieved) || 0;
+    const targetValue = parseFloat(target) || 0;
+    const progress = calculateProgress(achievedValue, targetValue);
 
-
-
-    const achievedValue = parseFloat(String(achieved)) || 0;
-  
-    const progress = calculateProgress(achievedValue, target);
     return (
       <div className="bg-white p-4 rounded-lg shadow-md mb-4">
         <div className="flex justify-between items-center mb-2">
@@ -116,13 +124,13 @@ const SalesGoals = () => {
           )}
         </div>
         <div className="mb-2">
-          <span className="text-gray-600">Target: ${target.toLocaleString()}</span>
+          <span className="text-gray-600">Target: {formatCurrency(targetValue)}</span>
           <span className="mx-2">|</span>
-          <span className="text-gray-600">Achieved:{achievedValue.toLocaleString()}</span>
+          <span className="text-gray-600">Achieved: {formatCurrency(achievedValue)}</span>
         </div>
-        <div className="h-4 bg-gray-200 rounded-full overflow-hidden">
+        <div className="relative h-2 bg-gray-200 rounded">
           <motion.div
-            className={`h-full ${progress >= 100 ? 'bg-green-500' : 'bg-blue-500'}`}
+            className={`h-full rounded ${progress >= 100 ? 'bg-green-500' : 'bg-blue-500'}`}
             variants={progressVariants}
             initial="initial"
             animate="animate"

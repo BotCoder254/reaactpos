@@ -62,27 +62,55 @@ export function SalesGoalsProvider({ children }) {
                 where('timestamp', '>=', Timestamp.fromDate(startOfMonth))
               ),
               (snapshot) => {
-                const sales = snapshot.docs.map(doc => ({
-                  ...doc.data(),
-                  timestamp: doc.data().timestamp?.toDate()
-                }));
+                const sales = snapshot.docs.map(doc => {
+                  const data = doc.data();
+                  // Calculate total from items if total is not present or invalid
+                  let calculatedTotal = 0;
+                  if (Array.isArray(data.items)) {
+                    calculatedTotal = data.items.reduce((sum, item) => {
+                      const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+                      const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+                      return sum + (price * quantity);
+                    }, 0);
+                  }
 
-                // Calculate achievements
-                const dailySales = sales.filter(sale => 
+                  // Ensure total is a valid number
+                  const total = typeof data.total === 'number' ? data.total : 
+                              (parseFloat(data.total) || calculatedTotal);
+
+                  return {
+                    ...data,
+                    total: parseFloat(total.toFixed(2)),
+                    timestamp: data.timestamp?.toDate()
+                  };
+                });
+
+                // Calculate achievements with proper number handling
+                const dailySales = parseFloat(sales.filter(sale => 
                   sale.timestamp >= startOfDay
-                ).reduce((sum, sale) => sum + sale.total, 0);
+                ).reduce((sum, sale) => sum + (sale.total || 0), 0).toFixed(2));
 
-                const weeklySales = sales.filter(sale => 
+                const weeklySales = parseFloat(sales.filter(sale => 
                   sale.timestamp >= startOfWeek
-                ).reduce((sum, sale) => sum + sale.total, 0);
+                ).reduce((sum, sale) => sum + (sale.total || 0), 0).toFixed(2));
 
-                const monthlySales = sales.reduce((sum, sale) => sum + sale.total, 0);
+                const monthlySales = parseFloat(sales.reduce((sum, sale) => 
+                  sum + (sale.total || 0), 0).toFixed(2));
 
                 // Update goals with achievements
                 const updatedGoals = {
-                  daily: { ...goalsData.daily, achieved: dailySales },
-                  weekly: { ...goalsData.weekly, achieved: weeklySales },
-                  monthly: { ...goalsData.monthly, achieved: monthlySales }
+                  daily: { 
+                    target: parseFloat(goalsData.daily?.target || 0), 
+                    achieved: dailySales 
+                  },
+                  weekly: { 
+                    target: parseFloat(goalsData.weekly?.target || 0), 
+                    achieved: weeklySales 
+                  },
+                  monthly: { 
+                    target: parseFloat(goalsData.monthly?.target || 0), 
+                    achieved: monthlySales 
+                  }
                 };
 
                 setGoals(updatedGoals);
