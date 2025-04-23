@@ -26,7 +26,7 @@ import {
   BellIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
-import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus, FiClock, FiCalendar, FiCoffee, FiFileText, FiHelpCircle } from 'react-icons/fi';
+import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus, FiClock, FiCalendar, FiCoffee, FiFileText, FiHelpCircle, FiDatabase } from 'react-icons/fi';
 import { useRole } from '../../contexts/RoleContext';
 import { classNames } from '../../utils/classNames';
 import { NavLink } from 'react-router-dom';
@@ -55,7 +55,6 @@ export default function Sidebar() {
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
     { name: 'Self-Checkout Monitor', icon: ChartBarIcon, path: '/monitor' },
     
-    
     // Staff & Shift Management Section
     { name: 'Staff Management', icon: UsersIcon, path: '/staff', 
       subItems: [
@@ -67,10 +66,6 @@ export default function Sidebar() {
     { name: 'Shift Management', icon: CalendarIcon, path: '/shifts',
       subItems: [
         { name: 'Schedule Shifts', icon: FiCalendar, path: '/shifts/schedule' },
-        // { name: 'Shift Calendar', icon: CalendarIcon, path: '/shifts/calendar' },
-        // { name: 'Attendance Log', icon: ClipboardDocumentListIcon, path: '/shifts/attendance' },
-        // { name: 'Shift Analytics', icon: ChartBarIcon, path: '/shifts/analytics' },
-        // { name: 'Break Management', icon: FiCoffee, path: '/shifts/breaks' },
       ]
     },
     
@@ -90,6 +85,13 @@ export default function Sidebar() {
       path: '/invoice-settings',
       description: 'Customize invoice templates and branding'
     },
+    {
+      name: 'Backup Manager',
+      title: 'Backup Manager',
+      icon: FiDatabase,
+      path: '/backup',
+      description: 'Manage system backups and recovery'
+    },
   ];
 
   const cashierNavItems = [
@@ -101,31 +103,24 @@ export default function Sidebar() {
     { name: 'Sales History', icon: ReceiptPercentIcon, path: '/sales' },
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Marketing', icon: PhotoIcon, path: '/marketing' },
-
-    // Shift Management Section for Cashiers
-    // { name: 'My Shifts', icon: CalendarIcon, path: '/shifts',
-    //   subItems: [
-    //     { name: 'View Schedule', icon: FiCalendar, path: '/shifts/schedule' },
-    //     { name: 'Clock In/Out', icon: ClockIcon, path: '/shifts/clock' },
-    //     { name: 'Break Timer', icon: FiCoffee, path: '/shifts/breaks' },
-    //     { name: 'Attendance History', icon: ClipboardDocumentListIcon, path: '/shifts/attendance' },
-    //     { name: 'Notifications', icon: BellIcon, path: '/shifts/notifications' },
-    //   ]
-    // },
-    
     { name: 'Employee Stats', icon: ChartPieIcon, path: '/employee-stats' },
     { name: 'Loyalty Program', icon: FiStar, path: '/loyalty' },
     { name: 'Settings', icon: CogIcon, path: '/settings' },
     { name: 'Refund Request', icon: FiRefreshCcw, path: '/refunds' },
-    // { name: 'Self-Checkout Monitor', icon: ChartBarIcon, path: '/monitor' },
     { name: 'Remote Assistance', icon: FiHelpCircle, path: '/remote-assistance' },
-
     {
       name: 'Invoice Options',
       title: 'Invoice Options',
       icon: FiFileText,
       path: '/invoice-options',
       description: 'Select invoice format and add messages'
+    },
+    {
+      name: 'Data Recovery',
+      title: 'Data Recovery',
+      icon: FiDatabase,
+      path: '/backup',
+      description: 'Request data recovery'
     },
   ];
 

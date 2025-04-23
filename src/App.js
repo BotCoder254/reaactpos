@@ -52,6 +52,7 @@ import SelfCheckoutMode from './components/checkout/SelfCheckoutMode';
 import SelfCheckoutMonitor from './components/checkout/SelfCheckoutMonitor';
 import RemoteAssistance from './components/checkout/RemoteAssistance';
 import InvestigateAlert from './components/checkout/InvestigateAlert';
+import BackupRouteGuard from './components/backup/BackupRouteGuard';
 
 // Import Shift Management Components
 import ShiftCalendar from './components/shifts/ShiftCalendar';
@@ -245,6 +246,9 @@ function AppContent() {
                   {handleRoleAccess(RemoteAssistance, 'cashier')}
                 </PrivateRoute>
               } />
+
+              {/* Backup route */}
+              <Route path="/backup" element={<BackupRouteGuard />} />
             </Routes>
           </div>
         </main>
