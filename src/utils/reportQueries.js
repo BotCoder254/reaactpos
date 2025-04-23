@@ -47,29 +47,57 @@ export async function getSalesReport(dateRange, cashierId = 'all', productCatego
     }
 
     const querySnapshot = await getDocs(q);
-    const sales = querySnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    }));
+    const sales = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      // Calculate total from items if total is not present or invalid
+      let calculatedTotal = 0;
+      if (Array.isArray(data.items)) {
+        calculatedTotal = data.items.reduce((sum, item) => {
+          const price = typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0;
+          const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+          return sum + (price * quantity);
+        }, 0);
+      }
+
+      // Ensure total is a valid number
+      const total = typeof data.total === 'number' ? data.total : 
+                   (parseFloat(data.total) || calculatedTotal);
+
+      return {
+        id: doc.id,
+        ...data,
+        total: parseFloat(total.toFixed(2)),
+        items: Array.isArray(data.items) ? data.items.map(item => ({
+          ...item,
+          price: typeof item.price === 'number' ? item.price : parseFloat(item.price) || 0,
+          quantity: typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0
+        })) : []
+      };
+    });
 
     // Filter by product category in memory if needed
     const filteredSales = productCategory === 'all' 
       ? sales 
       : sales.filter(sale => 
-          sale.items.some(item => item.category === productCategory)
+          Array.isArray(sale.items) && sale.items.some(item => item.category === productCategory)
         );
 
-    // Process sales data
-    const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-    const totalItems = filteredSales.reduce((sum, sale) => 
-      sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
-    );
+    // Process sales data with proper number handling
+    const totalSales = parseFloat(filteredSales.reduce((sum, sale) => 
+      sum + (sale.total || 0), 0).toFixed(2));
+
+    const totalItems = filteredSales.reduce((sum, sale) => {
+      if (!Array.isArray(sale.items)) return sum;
+      return sum + sale.items.reduce((itemSum, item) => 
+        itemSum + (parseInt(item.quantity) || 0), 0);
+    }, 0);
+
     const uniqueCustomers = new Set(filteredSales.map(sale => sale.customerId)).size;
 
-    // Generate sales trend data
+    // Generate sales trend data with proper number handling
     const salesByDate = filteredSales.reduce((acc, sale) => {
       const date = new Date(sale.timestamp.seconds * 1000).toLocaleDateString();
-      acc[date] = (acc[date] || 0) + sale.total;
+      acc[date] = (acc[date] || 0) + (sale.total || 0);
       return acc;
     }, {});
 
@@ -77,7 +105,7 @@ export async function getSalesReport(dateRange, cashierId = 'all', productCatego
       .sort(([dateA], [dateB]) => new Date(dateA) - new Date(dateB))
       .map(([date, total]) => ({
         date,
-        total
+        total: parseFloat(total.toFixed(2))
       }));
 
     return {

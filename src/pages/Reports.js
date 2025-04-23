@@ -118,17 +118,27 @@ const Reports = () => {
 
           setRealtimeData(filteredSales);
 
-          // Update summary data
-          const totalSales = filteredSales.reduce((sum, sale) => sum + sale.total, 0);
-          const totalItems = filteredSales.reduce((sum, sale) => 
-            sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0), 0
-          );
+          // Update summary data with proper number handling
+          const totalSales = filteredSales.reduce((sum, sale) => {
+            const saleTotal = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+            return sum + saleTotal;
+          }, 0);
+
+          const totalItems = filteredSales.reduce((sum, sale) => {
+            if (!Array.isArray(sale.items)) return sum;
+            return sum + sale.items.reduce((itemSum, item) => {
+              const quantity = typeof item.quantity === 'number' ? item.quantity : parseInt(item.quantity) || 0;
+              return itemSum + quantity;
+            }, 0);
+          }, 0);
+
           const uniqueCustomers = new Set(filteredSales.map(sale => sale.customerId)).size;
 
-          // Update sales trend
+          // Update sales trend with proper number handling
           const salesByDate = filteredSales.reduce((acc, sale) => {
             const date = new Date(sale.timestamp.seconds * 1000).toLocaleDateString();
-            acc[date] = (acc[date] || 0) + sale.total;
+            const saleTotal = typeof sale.total === 'number' ? sale.total : parseFloat(sale.total) || 0;
+            acc[date] = (acc[date] || 0) + saleTotal;
             return acc;
           }, {});
 
@@ -136,11 +146,11 @@ const Reports = () => {
             .sort(([dateA], [dateB]) => new Date(dateA) - new Date(dateB))
             .map(([date, total]) => ({
               date,
-              total
+              total: parseFloat(total.toFixed(2))
             }));
 
           setReportData({
-            totalSales,
+            totalSales: parseFloat(totalSales.toFixed(2)),
             totalItems,
             totalCustomers: uniqueCustomers,
             salesTrend
@@ -262,7 +272,9 @@ const Reports = () => {
               <div>
                 <h3 className="text-lg font-semibold text-gray-900">Total Sales</h3>
                 <p className="text-2xl font-bold text-primary-600">
-                  ${reportData.totalSales.toFixed(2)}
+                  ${typeof reportData.totalSales === 'number' ? 
+                    reportData.totalSales.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : 
+                    '0.00'}
                 </p>
               </div>
             </div>
