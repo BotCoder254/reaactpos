@@ -53,6 +53,10 @@ import SelfCheckoutMonitor from './components/checkout/SelfCheckoutMonitor';
 import RemoteAssistance from './components/checkout/RemoteAssistance';
 import InvestigateAlert from './components/checkout/InvestigateAlert';
 import BackupRouteGuard from './components/backup/BackupRouteGuard';
+import { StoreProvider } from './contexts/StoreContext';
+import StoreManagement from './pages/StoreManagement';
+import StoreSelector from './components/stores/StoreSelector';
+import TransferNotifications from './components/stores/TransferNotifications';
 
 // Import Shift Management Components
 import ShiftCalendar from './components/shifts/ShiftCalendar';
@@ -86,7 +90,15 @@ function AppContent() {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {!isAuthPage && !isSelfCheckout && <Sidebar />}
+      {!isAuthPage && !isSelfCheckout && (
+        <>
+          <Sidebar />
+          <div className="fixed top-4 right-4 z-50">
+            <StoreSelector />
+          </div>
+          <TransferNotifications />
+        </>
+      )}
       <div className={!isAuthPage && !isSelfCheckout ? "md:pl-64 flex flex-col min-h-screen" : "flex flex-col min-h-screen"}>
         {!isAuthPage && !isSelfCheckout && <DiscountBanner />}
         <main className="flex-1 py-6">
@@ -249,6 +261,13 @@ function AppContent() {
 
               {/* Backup route */}
               <Route path="/backup" element={<BackupRouteGuard />} />
+
+              {/* Store Management Routes */}
+              <Route path="/stores" element={
+                <PrivateRoute>
+                  {handleRoleAccess(StoreManagement, 'manager')}
+                </PrivateRoute>
+              } />
             </Routes>
           </div>
         </main>
@@ -272,7 +291,9 @@ export default function App() {
                     <InventoryProvider>
                       <ShiftProvider>
                         <InvoiceCustomizationProvider>
-                          <AppContent />
+                          <StoreProvider>
+                            <AppContent />
+                          </StoreProvider>
                         </InvoiceCustomizationProvider>
                       </ShiftProvider>
                     </InventoryProvider>

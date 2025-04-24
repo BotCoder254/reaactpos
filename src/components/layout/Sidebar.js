@@ -26,7 +26,7 @@ import {
   BellIcon,
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
-import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus, FiClock, FiCalendar, FiCoffee, FiFileText, FiHelpCircle, FiDatabase } from 'react-icons/fi';
+import { FiHome, FiShoppingCart, FiUsers, FiSettings, FiRefreshCcw, FiStar, FiUserPlus, FiClock, FiCalendar, FiCoffee, FiFileText, FiHelpCircle, FiDatabase, FiMapPin, FiTruck } from 'react-icons/fi';
 import { useRole } from '../../contexts/RoleContext';
 import { classNames } from '../../utils/classNames';
 import { NavLink } from 'react-router-dom';
@@ -54,6 +54,14 @@ export default function Sidebar() {
     { name: 'Customers', icon: UserGroupIcon, path: '/customers' },
     { name: 'Analytics', icon: ChartBarIcon, path: '/analytics' },
     { name: 'Self-Checkout Monitor', icon: ChartBarIcon, path: '/monitor' },
+    
+    // Add Store Management section
+    { name: 'Store Management', icon: FiMapPin, path: '/stores',
+      subItems: [
+        { name: 'Manage Stores', icon: FiMapPin, path: '/stores' },
+        { name: 'Transfer History', icon: FiTruck, path: '/stores?tab=transfers' }
+      ]
+    },
     
     // Staff & Shift Management Section
     { name: 'Staff Management', icon: UsersIcon, path: '/staff', 
